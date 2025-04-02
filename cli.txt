@@ -1,0 +1,12 @@
+docker exec -it teledata-2-backend-1 sh
+
+
+crontab -e
+
+*/5 * * * * /home/ubuntu/TeleData-2/upload-logs-to-s3.sh >> /home/ubuntu/TeleData-2/upload-logs.log 2>&1
+
+./upload-logs-to-s3.sh
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"   //AWS CLI INSTALLATION
+unzip awscliv2.zip
+sudo ./aws/install
