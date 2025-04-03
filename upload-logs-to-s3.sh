@@ -9,6 +9,9 @@ S3_BUCKET="teledata-log-bucket"
 # File to store the last run timestamp
 LAST_RUN_FILE="./last_run_timestamp.txt"
 
+# Set timezone to Myanmar (UTC+06:30)
+export TZ="Asia/Yangon"
+
 echo "Starting upload at $(date)"
 
 # Check if log directory exists
@@ -24,7 +27,7 @@ else
   LAST_RUN=0  # Default to epoch (1970-01-01) if no previous run
 fi
 
-# Current timestamp for this run
+# Current timestamp for this run (in seconds since epoch)
 CURRENT_TIME=$(date +%s)
 
 # Flag to track if any files are processed
@@ -38,8 +41,17 @@ for LOG_FILE in "$LOG_DIR"/*.log; do
 
     # Check if the file is newer than the last run
     if [ "$FILE_MOD_TIME" -gt "$LAST_RUN" ]; then
+      # Get file size in bytes
+      FILE_SIZE=$(stat -c %s "$LOG_FILE")
+
+      # Skip if file size is 0 KB
+      if [ "$FILE_SIZE" -eq 0 ]; then
+        echo "Skipping $LOG_FILE - file is 0 KB"
+        continue
+      fi
+
       ANY_FILES_FOUND=true
-      # Generate a unique S3 key with timestamp
+      # Generate a unique S3 key with timestamp in Myanmar time
       TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
       BASENAME=$(basename "$LOG_FILE")
       S3_KEY="logs/$BASENAME-$TIMESTAMP"
