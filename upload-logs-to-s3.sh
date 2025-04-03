@@ -9,9 +9,6 @@ S3_BUCKET="teledata-log-bucket"
 # File to store the last run timestamp
 LAST_RUN_FILE="./last_run_timestamp.txt"
 
-# Set timezone to Myanmar (UTC+06:30)
-export TZ="Asia/Yangon"
-
 echo "Starting upload at $(date)"
 
 # Check if log directory exists
@@ -51,10 +48,9 @@ for LOG_FILE in "$LOG_DIR"/*.log; do
       fi
 
       ANY_FILES_FOUND=true
-      # Generate a unique S3 key with timestamp in Myanmar time
-      TIMESTAMP=$(date +"%Y-%m-%d_%H-%M-%S")
+      # Use the original filename without adding a timestamp
       BASENAME=$(basename "$LOG_FILE")
-      S3_KEY="logs/$BASENAME-$TIMESTAMP"
+      S3_KEY="logs/$BASENAME"
 
       # Upload to S3
       echo "Uploading $LOG_FILE to s3://$S3_BUCKET/$S3_KEY"
