@@ -47,15 +47,15 @@ jobs:
       - name: Build and Push Frontend Docker Image
         working-directory: ./Frontend
         run: |
-          docker build -t myusername/myapp-frontend:dev .
-          docker push myusername/myapp-frontend:dev
+          docker build -t kyawzayarsoe/app-frontend:dev .
+          docker push kyawzayarsoe/app-frontend:dev
 
       # Backend: Docker build and push
       - name: Build and Push Backend Docker Image
         working-directory: ./Backend
         run: |
-          docker build -t myusername/myapp-backend:dev .
-          docker push myusername/myapp-backend:dev
+          docker build -t kyawzayarsoe/myapp-backend:dev .
+          docker push kyawzayarsoe/myapp-backend:dev
 
       # Deploy to EC2
       - name: Deploy to EC2
