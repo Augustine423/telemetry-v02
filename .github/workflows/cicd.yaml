@@ -61,8 +61,8 @@ jobs:
       - name: Build and Push Backend Docker Image
         working-directory: ./Backend
         run: |
-          221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev .
-          221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev
+          docker build -t 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev .
+          docker push 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev
 
       # Deploy to EC2 (with ECR login)
       - name: Deploy to EC2
@@ -83,7 +83,7 @@ jobs:
             mkdir -p /home/ubuntu/telemetry-v02
             cd /home/ubuntu/telemetry-v02
             git pull origin main || git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .
-            aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.<region>.amazonaws.com
+            aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com
             docker-compose pull
             docker-compose up -d --remove-orphans
             echo "*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh" | crontab -
