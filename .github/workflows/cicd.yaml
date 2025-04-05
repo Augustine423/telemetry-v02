@@ -41,20 +41,21 @@ jobs:
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
+          logout: true
 
       # Frontend: Docker build and push
       - name: Build and Push Frontend Docker Image
         working-directory: ./Frontend
         run: |
-          docker build -t kyawzayarsoe/app-frontend:dev .
-          docker push kyawzayarsoe/app-frontend:dev
+          docker build -t myusername/myapp-frontend:dev .
+          docker push myusername/myapp-frontend:dev
 
       # Backend: Docker build and push
       - name: Build and Push Backend Docker Image
         working-directory: ./Backend
         run: |
-          docker build -t kyawzayarsoe/app-backend:dev .
-          docker push kyawzayarsoe/app-backend:dev
+          docker build -t myusername/myapp-backend:dev .
+          docker push myusername/myapp-backend:dev
 
       # Deploy to EC2
       - name: Deploy to EC2
@@ -64,20 +65,18 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Install Docker Compose if not present
+            if ! command -v git &> /dev/null; then
+              sudo apt update
+              sudo apt install git -y
+            fi
             if ! command -v docker-compose &> /dev/null; then
               sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
-            # Create project directory
             mkdir -p /home/ubuntu/telemetry-v02
             cd /home/ubuntu/telemetry-v02
-            # Copy docker-compose.yml and script via SSH (simplified by pulling repo)
-            git pull origin main || git clone https://github.com/${{ github.repository }} .
-            # Pull and restart containers
+            git pull origin main || git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .
             docker-compose pull
             docker-compose up -d --remove-orphans
-            # Ensure cron job is set up
             echo "*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh" | crontab -
-            # Verify cron
             crontab -l
