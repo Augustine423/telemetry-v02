@@ -7,10 +7,20 @@ crontab -e
 
 ./upload-logs-to-s3.sh
 
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"   //AWS CLI INSTALLATION
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 unzip awscliv2.zip
 sudo ./aws/install
 
-admin
-mdt20210616
-aioceaneyedb
+
+database url	=	aioceaneye-db.c5mwmuq0k8e2.ap-northeast-2.rds.amazonaws.com
+username	= 	admin
+password	=	mdt20210616
+db name		=	aioceaneyedb	
+
+default-vpc-073e3af6184c5dfea
+
+
+
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip awscliv2.zip
+sudo ./aws/install
