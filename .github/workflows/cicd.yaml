@@ -22,6 +22,7 @@ jobs:
     steps:
       # Checkout with full git history
       - name: Checkout code
+<<<<<<< HEAD
         uses: actions/checkout@v4  # Updated to latest version
         with:
           fetch-depth: 0
