@@ -32,7 +32,7 @@ jobs:
           docker-compose --version
 
       - name: Cache Docker layers
-        uses: actions/cache@v4  # Updated to latest version
+        uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache
           key: ${{ runner.os }}-buildx-${{ github.sha }}
@@ -61,6 +61,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Debug Secrets
+        run: |
+          echo "EC2_HOST length: ${#EC2_HOST}"
+          echo "EC2_USERNAME length: ${#EC2_USERNAME}"
+          echo "EC2_SSH_KEY length: ${#EC2_SSH_KEY}"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -68,6 +78,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 30s
+          debug: true
           script: |
             set -e
 
@@ -126,6 +137,7 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 30s
+          debug: true
           script: |
             set -e
             cd ${{ env.APP_DIR }}
@@ -136,11 +148,3 @@ jobs:
               exit 1
             fi
             echo "✓ Deployment verified successfully!"
-
-      - name: Notify on Failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: "deployments"
-          text: "🚨 Deployment failed for ${{ github.repository }} on commit ${{ github.sha }}!"
