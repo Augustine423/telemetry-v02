@@ -43,28 +43,36 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # Login to ECR (for pushing images)
+      # Login to ECR
       - name: Login to Amazon ECR
-        uses: docker/login-action@v2
-        with:
-          registry: 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com
-          ecr: auto
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
 
-      # Frontend: Build and Push to ECR
-      - name: Build and Push Frontend Docker Image
+      # Frontend: Build, Tag, and Push to ECR
+      - name: Build, Tag, and Push Frontend Docker Image to ECR
         working-directory: ./Frontend
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: aioceaneye/frontend
+          IMAGE_TAG: dev  # Option 1: Static 'dev' tag
+          # IMAGE_TAG: ${{ github.sha }}  # Option 2: Dynamic SHA tag
         run: |
-          docker build -t 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/frontend:dev .
-          docker push 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/frontend:dev
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-      # Backend: Build and Push to ECR
-      - name: Build and Push Backend Docker Image
+      # Backend: Build, Tag, and Push to ECR
+      - name: Build, Tag, and Push Backend Docker Image to ECR
         working-directory: ./Backend
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          REPOSITORY: aioceaneye/backend
+          IMAGE_TAG: dev  # Option 1: Static 'dev' tag
+          # IMAGE_TAG: ${{ github.sha }}  # Option 2: Dynamic SHA tag
         run: |
-          docker build -t 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev .
-          docker push 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev
+          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-      # Deploy to EC2 (with ECR login)
+      # Deploy to EC2
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v0.1.10
         with:
