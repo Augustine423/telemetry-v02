@@ -1,6 +1,5 @@
 name: CI/CD Pipeline
 
-# Trigger on push to main and pull requests
 on:
   push:
     branches:
@@ -9,25 +8,20 @@ on:
     branches:
       - main
 
-# Environment variables available to all jobs
 env:
   DOCKER_COMPOSE_VERSION: "2.24.7"  # Latest stable version as of April 2025
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    # Only run on push events (not PRs)
     if: github.event_name == 'push'
     
     steps:
-      # Checkout with full git history
       - name: Checkout code
-<<<<<<< HEAD
-        uses: actions/checkout@v4  # Updated to latest version
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # Cache Docker layers
       - name: Cache Docker layers
         uses: actions/cache@v3
         with:
@@ -36,26 +30,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
-      # Deploy to EC2 with better error handling and modern practices
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3  # Updated to latest version
+        uses: appleboy/ssh-action@v1.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-=======
-        uses: actions/checkout@v3
-
-      - name: Deploy to EC2 and Build Locally
-        uses: appleboy/ssh-action@v0.1.10
->>>>>>> cf978b891050b809f2d285cbd3477a7160c2934f
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-<<<<<<< HEAD
           connection_timeout: 30s
-          script_stop: true  # Stop on first error
+          script_stop: true
           script: |
-            # Exit on any error
             set -e
             
             echo "🔄 Updating system packages..."
@@ -88,7 +73,8 @@ jobs:
               git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" .
             fi
 
-            echo "🧹 Cleaning up old Docker resources..."
+            echo "🧹 Cleaning up Docker resources..."
+            docker image prune -f
             docker system prune -f
             
             echo "🏗️ Building and starting containers..."
@@ -99,52 +85,22 @@ jobs:
             echo "📅 Configuring cron job..."
             CRON_FILE="/tmp/crontab.tmp"
             CRON_JOB="*/5 * * * * ${PROJECT_DIR}/upload-logs-to-s3.sh"
-            # Remove existing job and add new one
             (crontab -l 2>/dev/null | grep -v 'upload-logs-to-s3.sh' || true; echo "${CRON_JOB}") > "${CRON_FILE}"
             crontab "${CRON_FILE}"
             rm -f "${CRON_FILE}"
             
             echo "✅ Deployment completed successfully!"
 
-      # Add health
-=======
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "🔄 Updating system packages..."
-            sudo apt update -y
-
-            echo "🐳 Ensuring Docker & Docker Compose are installed..."
-            if ! command -v docker &> /dev/null; then
-              curl -fsSL https://get.docker.com | sudo bash
-              sudo usermod -aG docker $USER
-            fi
-
-            if ! command -v docker-compose &> /dev/null; then
-              sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-            fi
-
-            echo "📁 Cloning or pulling the latest repo..."
-            mkdir -p /home/ubuntu/telemetry-v02
             cd /home/ubuntu/telemetry-v02
-
-            if [ -d ".git" ]; then
-              git reset --hard
-              git clean -fd
-              git pull origin main
-            else
-              git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} . 
+            if ! docker-compose ps | grep "Up"; then
+              echo "❌ Containers failed to start!"
+              exit 1
             fi
-
-            echo "🏗️ Building Docker containers..."
-            docker image prune -f
-            docker-compose down
-            docker-compose build
-            docker-compose up -d --remove-orphans
-
-            echo "📅 Setting up cron job for logs upload..."
-            CRON_JOB="*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh"
-            (crontab -l 2>/dev/null | grep -v 'upload-logs-to-s3.sh'; echo "$CRON_JOB") | crontab -
-            crontab -l
-
-            echo "✅ Deployment finished successfully."
->>>>>>> cf978b891050b809f2d285cbd3477a7160c2934f
+            echo "✓ Containers are running successfully"
