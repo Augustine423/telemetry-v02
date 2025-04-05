@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Directory where logs are mounted from the container
-LOG_DIR="./Backend/logs"
+# Directory where logs are mounted from the container (absolute path)
+LOG_DIR="/home/ubuntu/telemetry-v02/Backend/logs"
 
 # S3 bucket name
 S3_BUCKET="teledata-log-bucket"
 
-# File to store the last run timestamp
-LAST_RUN_FILE="./last_run_timestamp.txt"
+# File to store the last run timestamp (absolute path)
+LAST_RUN_FILE="/home/ubuntu/telemetry-v02/last_run_timestamp.txt"
 
 echo "Starting upload at $(date)"
 
