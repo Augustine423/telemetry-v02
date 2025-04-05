@@ -1,6 +1,5 @@
 name: CI/CD Pipeline
 
-# Triggers
 on:
   push:
     branches:
@@ -9,15 +8,12 @@ on:
     branches:
       - main
 
-# Global environment variables
 env:
   DOCKER_COMPOSE_VERSION: "2.24.7"
   APP_DIR: "/home/ubuntu/app"
-  SERVICE_NAME: "app"  # Adjust based on your docker-compose service name
+  SERVICE_NAME: "app"
 
-# Define jobs
 jobs:
-  # Build and Test job (runs on PRs and pushes)
   build-and-test:
     runs-on: ubuntu-latest
     steps:
@@ -28,6 +24,12 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version  # Verify installation
 
       - name: Cache Docker layers
         uses: actions/cache@v3
@@ -48,9 +50,8 @@ jobs:
           # docker-compose exec ${SERVICE_NAME} npm test
           docker-compose down
 
-  # Deploy job (runs only on push to main)
   deploy:
-    needs: build-and-test  # Depends on successful build-and-test
+    needs: build-and-test
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
@@ -67,11 +68,10 @@ jobs:
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
           timeout: 30s
-          debug: true  # Enable for initial troubleshooting
+          debug: true
           command: |
             set -e
 
-            # Install dependencies
             echo "🔄 Updating system and installing dependencies..."
             sudo apt update -y && sudo apt upgrade -y
             
@@ -88,12 +88,10 @@ jobs:
               sudo chmod +x /usr/local/bin/docker-compose
             fi
 
-            # Setup application directory
             echo "📁 Preparing application directory..."
             mkdir -p ${{ env.APP_DIR }}
             cd ${{ env.APP_DIR }}
 
-            # Sync repository
             echo "🔄 Syncing repository..."
             if [ -d ".git" ]; then
               git fetch --all
@@ -104,18 +102,15 @@ jobs:
               git clone https://github.com/${{ github.repository }} .
             fi
 
-            # Manage Docker resources
             echo "🧹 Cleaning up Docker resources..."
             docker image prune -f
             docker system prune -f --volumes
 
-            # Deploy application
             echo "🏗️ Deploying application..."
             docker-compose down --remove-orphans --volumes
             docker-compose build --no-cache
             docker-compose up -d --force-recreate --remove-orphans
 
-            # Configure cron job (example for logs)
             echo "📅 Setting up cron job..."
             CRON_FILE="/tmp/crontab.tmp"
             CRON_JOB="*/5 * * * * ${{ env.APP_DIR }}/upload-logs-to-s3.sh"
@@ -135,7 +130,7 @@ jobs:
           command: |
             set -e
             cd ${{ env.APP_DIR }}
-            sleep 5  # Give containers time to start
+            sleep 5
             if ! docker-compose ps | grep "Up" >/dev/null 2>&1; then
               echo "❌ Deployment failed: Containers not running!"
               docker-compose logs
@@ -143,10 +138,4 @@ jobs:
             fi
             echo "✓ Deployment verified successfully!"
 
-      - name: Notify on Failure
-        if: failure()
-        uses: slackapi/slack-github-action@v1.25.0
-        with:
-          slack-bot-token: ${{ secrets.SLACK_BOT_TOKEN }}
-          channel-id: "deployments"
-          text: "🚨 Deployment failed for ${{ github.repository }} on commit ${{ github.sha }}!"
+     
