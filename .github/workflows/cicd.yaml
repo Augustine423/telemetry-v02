@@ -32,13 +32,11 @@ jobs:
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 30s  # Changed from connection_timeout to timeout
+          timeout: 30s
           script_stop: true
           script: |
             set -e
@@ -70,7 +68,7 @@ jobs:
               git reset --hard origin/main
               git clean -fd
             else
-              git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" .
+              git clone https://github.com/${{ github.repository }} .
             fi
 
             echo "🧹 Cleaning up Docker resources..."
@@ -97,7 +95,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 30s  # Changed here too
+          timeout: 30s
           script: |
             cd /home/ubuntu/telemetry-v02
             if ! docker-compose ps | grep "Up"; then
