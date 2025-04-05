@@ -1,116 +1,101 @@
 name: CI/CD Pipeline
 
+# Trigger on push to main and pull requests
 on:
   push:
     branches:
       - main
+  pull_request:
+    branches:
+      - main
+
+# Environment variables available to all jobs
+env:
+  DOCKER_COMPOSE_VERSION: "2.24.7"  # Latest stable version as of April 2025
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-
+    # Only run on push events (not PRs)
+    if: github.event_name == 'push'
+    
     steps:
+      # Checkout with full git history
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Set IMAGE_TAG (from buildspec.yml)
-      - name: Set Image Tag
-        id: set-tag
-        run: |
-          echo "IMAGE_TAG=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
-          echo "Image Tag set to: $IMAGE_TAG"
-
-      # Frontend: Build
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/checkout@v4  # Updated to latest version
         with:
-          node-version: '20'
-      - name: Build Frontend
-        working-directory: ./Frontend
-        run: |
-          echo "Installing source NPM dependencies..."
-          npm install
-          npm run build
+          fetch-depth: 0
 
-      # Backend: Build
-      - name: Setup JDK
-        uses: actions/setup-java@v3
+      # Cache Docker layers
+      - name: Cache Docker layers
+        uses: actions/cache@v3
         with:
-          java-version: '21'
-          distribution: 'temurin'
-      - name: Build Backend
-        working-directory: ./Backend
-        run: |
-          mvn clean package -DskipTests
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
 
-      # Configure AWS Credentials
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      # Login to ECR (using preferred GitHub Actions method)
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Frontend: Build, Tag, and Push to ECR
-      - name: Build, Tag, and Push Frontend Docker Image to ECR
-        working-directory: ./Frontend
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: aioceaneye/frontend
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        run: |
-          echo "Building the Docker image for Frontend..."
-          docker build -t $REPOSITORY:$IMAGE_TAG .
-          docker tag $REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:$IMAGE_TAG
-          echo "Pushing the Docker image..."
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-      # Backend: Build, Tag, and Push to ECR
-      - name: Build, Tag, and Push Backend Docker Image to ECR
-        working-directory: ./Backend
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: aioceaneye/backend
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        run: |
-          echo "Building the Docker image for Backend..."
-          docker build -t $REPOSITORY:$IMAGE_TAG .
-          docker tag $REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:$IMAGE_TAG
-          echo "Pushing the Docker image..."
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-      # Deploy to EC2
+      # Deploy to EC2 with better error handling and modern practices
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.10
+        uses: appleboy/ssh-action@v1.0.3  # Updated to latest version
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          env:
-            IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          connection_timeout: 30s
+          script_stop: true  # Stop on first error
           script: |
-            if ! command -v git &> /dev/null; then
-              sudo apt update
-              sudo apt install git -y
+            # Exit on any error
+            set -e
+            
+            echo "🔄 Updating system packages..."
+            sudo apt update -y && sudo apt upgrade -y
+
+            echo "🐳 Installing Docker if not present..."
+            if ! command -v docker >/dev/null 2>&1; then
+              curl -fsSL https://get.docker.com | sudo sh
+              sudo usermod -aG docker ${USER}
+              sudo systemctl enable docker
             fi
-            if ! command -v docker-compose &> /dev/null; then
-              sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+
+            echo "🐙 Installing Docker Compose if not present..."
+            if ! command -v docker-compose >/dev/null 2>&1; then
+              sudo curl -L "https://github.com/docker/compose/releases/download/v${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
-            mkdir -p /home/ubuntu/telemetry-v02
-            cd /home/ubuntu/telemetry-v02
-            git pull origin main || git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .
-            echo "Logging in to Amazon ECR on EC2..."
-            aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com
-            # Update docker-compose.yml with the new tag
-            sed -i "s|aioceaneye/frontend:dev|aioceaneye/frontend:$IMAGE_TAG|g" docker-compose.yml
-            sed -i "s|aioceaneye/backend:dev|aioceaneye/backend:$IMAGE_TAG|g" docker-compose.yml
-            docker-compose pull
-            docker-compose up -d --remove-orphans
-            echo "*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh" | crontab -
-            crontab -l
+
+            echo "📁 Setting up project directory..."
+            PROJECT_DIR="/home/ubuntu/telemetry-v02"
+            mkdir -p "${PROJECT_DIR}"
+            cd "${PROJECT_DIR}"
+
+            echo "🔄 Syncing repository..."
+            if [ -d ".git" ]; then
+              git fetch --all
+              git reset --hard origin/main
+              git clean -fd
+            else
+              git clone "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" .
+            fi
+
+            echo "🧹 Cleaning up old Docker resources..."
+            docker system prune -f
+            
+            echo "🏗️ Building and starting containers..."
+            docker-compose down --remove-orphans
+            docker-compose build --no-cache
+            docker-compose up -d --remove-orphans --force-recreate
+
+            echo "📅 Configuring cron job..."
+            CRON_FILE="/tmp/crontab.tmp"
+            CRON_JOB="*/5 * * * * ${PROJECT_DIR}/upload-logs-to-s3.sh"
+            # Remove existing job and add new one
+            (crontab -l 2>/dev/null | grep -v 'upload-logs-to-s3.sh' || true; echo "${CRON_JOB}") > "${CRON_FILE}"
+            crontab "${CRON_FILE}"
+            rm -f "${CRON_FILE}"
+            
+            echo "✅ Deployment completed successfully!"
+
+      # Add health

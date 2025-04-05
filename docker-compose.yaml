@@ -1,8 +1,8 @@
-version: '3.8'
-
 services:
   frontend:
-    image: 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/frontend:dev
+    build:
+      context: ./Frontend
+      dockerfile: Dockerfile
     ports:
       - "80:80"
     depends_on:
@@ -11,13 +11,15 @@ services:
       - drone-network
 
   backend:
-    image: 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com/aioceaneye/backend:dev
+    build:
+      context: ./Backend
+      dockerfile: Dockerfile
     ports:
       - "8080:8080"
       - "14552-14559:14552-14559/udp"
       - "15000-15009:15000-15009/udp"
     volumes:
-      - ./Backend/logs:/app/logs
+      - ./Backend/logs:/app/logs  # This must be present
     networks:
       - drone-network
 
