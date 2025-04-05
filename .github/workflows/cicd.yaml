@@ -22,6 +22,7 @@ jobs:
     steps:
       # Checkout with full git history
       - name: Checkout code
+<<<<<<< HEAD
         uses: actions/checkout@v4  # Updated to latest version
         with:
           fetch-depth: 0
@@ -40,10 +41,17 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3  # Updated to latest version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+=======
+        uses: actions/checkout@v3
+
+      - name: Deploy to EC2 and Build Locally
+        uses: appleboy/ssh-action@v0.1.10
+>>>>>>> cf978b891050b809f2d285cbd3477a7160c2934f
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+<<<<<<< HEAD
           connection_timeout: 30s
           script_stop: true  # Stop on first error
           script: |
@@ -99,3 +107,44 @@ jobs:
             echo "✅ Deployment completed successfully!"
 
       # Add health
+=======
+          script: |
+            echo "🔄 Updating system packages..."
+            sudo apt update -y
+
+            echo "🐳 Ensuring Docker & Docker Compose are installed..."
+            if ! command -v docker &> /dev/null; then
+              curl -fsSL https://get.docker.com | sudo bash
+              sudo usermod -aG docker $USER
+            fi
+
+            if ! command -v docker-compose &> /dev/null; then
+              sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+
+            echo "📁 Cloning or pulling the latest repo..."
+            mkdir -p /home/ubuntu/telemetry-v02
+            cd /home/ubuntu/telemetry-v02
+
+            if [ -d ".git" ]; then
+              git reset --hard
+              git clean -fd
+              git pull origin main
+            else
+              git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} . 
+            fi
+
+            echo "🏗️ Building Docker containers..."
+            docker image prune -f
+            docker-compose down
+            docker-compose build
+            docker-compose up -d --remove-orphans
+
+            echo "📅 Setting up cron job for logs upload..."
+            CRON_JOB="*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh"
+            (crontab -l 2>/dev/null | grep -v 'upload-logs-to-s3.sh'; echo "$CRON_JOB") | crontab -
+            crontab -l
+
+            echo "✅ Deployment finished successfully."
+>>>>>>> cf978b891050b809f2d285cbd3477a7160c2934f
