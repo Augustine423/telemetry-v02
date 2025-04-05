@@ -9,7 +9,7 @@ on:
       - main
 
 env:
-  DOCKER_COMPOSE_VERSION: "2.24.7"  # Latest stable version as of April 2025
+  DOCKER_COMPOSE_VERSION: "2.24.7"
 
 jobs:
   deploy:
@@ -38,7 +38,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          connection_timeout: 30s
+          timeout: 30s  # Changed from connection_timeout to timeout
           script_stop: true
           script: |
             set -e
@@ -97,6 +97,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 30s  # Changed here too
           script: |
             cd /home/ubuntu/telemetry-v02
             if ! docker-compose ps | grep "Up"; then
