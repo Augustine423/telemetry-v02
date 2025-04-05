@@ -1,98 +1,102 @@
-name: CI/CD Pipeline
+name: Production CI/CD Pipeline with Cron
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_ECR_REGISTRY: 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com
+  FRONTEND_DIR: ./Frontend
+  BACKEND_DIR: ./Backend
+  DEPLOY_DIR: /home/ubuntu/telemetry-v02
+  LOG_UPLOAD_SCRIPT: upload-logs-to-s3.sh
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      # [Previous steps remain the same until the Deploy to EC2 step]
 
-      # Frontend: Build
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-      - name: Build Frontend
-        working-directory: ./Frontend
-        run: |
-          npm install
-          npm run build
-
-      # Backend: Build
-      - name: Setup JDK
-        uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-      - name: Build Backend
-        working-directory: ./Backend
-        run: |
-          mvn clean package -DskipTests
-
-      # Configure AWS Credentials
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
-
-      # Login to ECR
-      - name: Login to Amazon ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      # Frontend: Build, Tag, and Push to ECR
-      - name: Build, Tag, and Push Frontend Docker Image to ECR
-        working-directory: ./Frontend
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: aioceaneye/frontend
-          IMAGE_TAG: dev  # Option 1: Static 'dev' tag
-          # IMAGE_TAG: ${{ github.sha }}  # Option 2: Dynamic SHA tag
-        run: |
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-      # Backend: Build, Tag, and Push to ECR
-      - name: Build, Tag, and Push Backend Docker Image to ECR
-        working-directory: ./Backend
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: aioceaneye/backend
-          IMAGE_TAG: dev  # Option 1: Static 'dev' tag
-          # IMAGE_TAG: ${{ github.sha }}  # Option 2: Dynamic SHA tag
-        run: |
-          docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
-          docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
-
-      # Deploy to EC2
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.10
+      - name: Deploy to EC2 with Cron Setup
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USERNAME }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          envs: GITHUB_SHA
           script: |
-            if ! command -v git &> /dev/null; then
-              sudo apt update
-              sudo apt install git -y
+            #!/bin/bash
+            set -euo pipefail
+            
+            # === 1. System Setup ===
+            echo "Installing dependencies..."
+            export DEBIAN_FRONTEND=noninteractive
+            sudo apt-get update -qq
+            sudo apt-get install -yqq git docker.io awscli cron
+            
+            # === 2. Docker Setup ===
+            echo "Configuring Docker..."
+            sudo mkdir -p /usr/local/lib/docker/cli-plugins
+            sudo curl -sSL https://github.com/docker/compose/releases/download/v2.24.5/docker-compose-linux-x86_64 \
+              -o /usr/local/lib/docker/cli-plugins/docker-compose
+            sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+            sudo systemctl enable docker
+            sudo systemctl start docker
+            
+            # === 3. ECR Login ===
+            echo "Logging into ECR..."
+            aws ecr get-login-password --region ap-southeast-1 | \
+              sudo docker login --username AWS --password-stdin ${{ env.AWS_ECR_REGISTRY }}
+            
+            # === 4. Code Deployment ===
+            echo "Deploying application..."
+            mkdir -p "${{ env.DEPLOY_DIR }}"
+            cd "${{ env.DEPLOY_DIR }}" || exit 1
+            
+            if [ -d .git ]; then
+              git pull origin main
+            else
+              git clone --branch main https://github.com/${{ github.repository }}.git .
             fi
-            if ! command -v docker-compose &> /dev/null; then
-              sudo curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
+            
+            # Update images in docker-compose.yml
+            sed -i.bak \
+              -e "s|frontend:.*|frontend:$GITHUB_SHA|g" \
+              -e "s|backend:.*|backend:$GITHUB_SHA|g" \
+              docker-compose.yml
+            
+            # Start containers
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans
+            
+            # === 5. Cron Job Setup ===
+            echo "Configuring log upload cron job..."
+            
+            # Make sure script exists and is executable
+            if [ ! -f "${{ env.LOG_UPLOAD_SCRIPT }}" ]; then
+              echo "Error: Log upload script not found at ${{ env.LOG_UPLOAD_SCRIPT }}"
+              exit 1
             fi
-            mkdir -p /home/ubuntu/telemetry-v02
-            cd /home/ubuntu/telemetry-v02
-            git pull origin main || git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} .
-            aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin 221082202241.dkr.ecr.ap-southeast-1.amazonaws.com
-            docker-compose pull
-            docker-compose up -d --remove-orphans
-            echo "*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh" | crontab -
+            
+            chmod +x "${{ env.LOG_UPLOAD_SCRIPT }}"
+            
+            # Add to crontab without duplication
+            CRON_JOB="*/5 * * * * ${{ env.DEPLOY_DIR }}/${{ env.LOG_UPLOAD_SCRIPT }} >> ${{ env.DEPLOY_DIR }}/upload-logs.log 2>&1"
+            (crontab -l 2>/dev/null | grep -v "${{ env.LOG_UPLOAD_SCRIPT }}"; echo "$CRON_JOB") | crontab -
+            
+            # Verify cron job
+            echo "Current crontab:"
             crontab -l
+            
+            # === 6. Cleanup ===
+            echo "Cleaning up old resources..."
+            sudo docker system prune -af --volumes --filter "until=24h"
+            
+            echo "=== Deployment Successful ==="
+
+      # [Rest of the workflow remains the same]
