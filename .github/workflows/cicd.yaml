@@ -98,7 +98,7 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
-          EC2_USER: ec2-user  # Adjust based on your AMI (e.g., ubuntu)
+          EC2_USER: ubuntu  # Adjust based on your AMI (e.g., ubuntu)
           VERSION_TAG: ${{ needs.build.outputs.version_tag }}
         run: |
           echo "$SSH_PRIVATE_KEY" > private_key.pem
