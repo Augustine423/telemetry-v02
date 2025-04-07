@@ -1,177 +1,263 @@
-deploy:
-  runs-on: ubuntu-latest
-  needs: build
-  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-  steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+name: Deploy to EC2 with Rollback
 
-    - name: Configure AWS Credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
-    - name: Deploy to EC2 with Rollback
-      env:
-        SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-        EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
-        EC2_USER: ubuntu
-        VERSION_TAG: ${{ needs.build.outputs.version_tag }}
-      run: |
-        echo -e "$SSH_PRIVATE_KEY" > private_key.pem
-        chmod 600 private_key.pem
-        ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_INSTANCE_IP << EOF
-          # Update package list for Ubuntu
-          sudo apt-get update -y || true
+env:
+  AWS_REGION: us-east-1
+  DOCKER_REGISTRY: docker.io
+  IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}/teledata
+  FRONTEND_IMAGE: frontend
+  BACKEND_IMAGE: backend
 
-          # Install Docker if not present
-          if ! command -v docker >/dev/null 2>&1; then
-            sudo apt-get install -y docker.io || true
-            sudo systemctl start docker || true
-            sudo systemctl enable docker || true
-            sudo usermod -aG docker \$EC2_USER || true
-          fi
+permissions:
+  contents: read
 
-          # Install Docker Compose if not present
-          if ! command -v docker-compose >/dev/null 2>&1; then
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose || true
-            sudo chmod +x /usr/local/bin/docker-compose || true
-            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
-          fi
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-          # Install AWS CLI if not present
-          if ! command -v aws >/dev/null 2>&1; then
-            sudo apt-get install -y awscli || true
-          fi
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'Frontend/package-lock.json'
 
-          # Login to Docker Hub
-          echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin || true
+      - name: Set up JDK and Maven
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
 
-          # Create project directory with sudo and fix ownership
-          sudo mkdir -p /home/$EC2_USER/teledata || { echo "Failed to create directory"; exit 1; }
-          sudo chown $EC2_USER:$EC2_USER /home/$EC2_USER/teledata || { echo "Failed to set ownership"; exit 1; }
-          cd /home/$EC2_USER/teledata || { echo "Failed to cd into directory"; exit 1; }
+      - name: Install Frontend Dependencies
+        working-directory: ./Frontend
+        run: npm ci || true
 
-          # Write docker-compose.yaml
-          cat > docker-compose.yaml << 'INNER_EOF'
-          version: "3.8"
-          services:
-            frontend:
-              image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${VERSION_TAG}
-              ports:
-                - "80:80"
-              restart: unless-stopped
-            backend:
-              image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${VERSION_TAG}
-              ports:
-                - "8080:8080"
-                - "14552-14559:14552-14559/udp"
-                - "15000-15009:15000-15009/udp"
-              volumes:
-                - /home/$EC2_USER/teledata/logs:/app/logs
-              restart: unless-stopped
-          volumes:
-            logs:
-          INNER_EOF
+      - name: Lint Frontend (Optional)
+        working-directory: ./Frontend
+        run: npm run lint || true
 
-          # Write upload-logs-to-s3.sh
-          cat > upload-logs-to-s3.sh << 'INNER_EOF'
-          #!/bin/bash
-          LOG_DIR="/home/$EC2_USER/teledata/logs"
-          S3_BUCKET="teledata-log-bucket"
-          LAST_RUN_FILE="/home/$EC2_USER/teledata/last_run_timestamp.txt"
-          LOG_OUTPUT="/home/$EC2_USER/teledata/upload-logs-to-s3.log"
+      - name: Build Frontend
+        working-directory: ./Frontend
+        run: npm run build || true
 
-          exec > >(tee -a "\$LOG_OUTPUT") 2>&1
-          log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] \$1"; }
-          log "Starting log upload process"
+      - name: Build and Test Backend
+        working-directory: ./Backend
+        run: mvn clean package || true
 
-          [[ ! -d "\$LOG_DIR" ]] && { log "Error: Log directory \$LOG_DIR not found"; exit 1; }
-          command -v aws >/dev/null 2>&1 || { log "Error: AWS CLI not installed"; exit 1; }
+      - name: Generate Version Tag
+        id: version
+        run: echo "tag=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
 
-          LAST_RUN=\$( [[ -f "\$LAST_RUN_FILE" ]] && cat "\$LAST_RUN_FILE" || echo 0 )
-          CURRENT_TIME=\$(date +%s)
-          ANY_FILES_FOUND=false
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-          shopt -s nullglob
-          for LOG_FILE in "\$LOG_DIR"/*.log; do
-            if [[ -f "\$LOG_FILE" ]]; then
-              FILE_MOD_TIME=\$(stat -c %Y "\$LOG_FILE")
-              FILE_SIZE=\$(stat -c %s "\$LOG_FILE")
-              if [[ "\$FILE_MOD_TIME" -gt "\$LAST_RUN" && "\$FILE_SIZE" -gt 0 ]]; then
-                ANY_FILES_FOUND=true
-                S3_KEY="logs/\$(basename "\$LOG_FILE")"
-                log "Uploading \$LOG_FILE to s3://\$S3_BUCKET/\$S3_KEY"
-                if aws s3 cp "\$LOG_FILE" "s3://\$S3_BUCKET/\$S3_KEY" --quiet; then
-                  log "Uploaded \$LOG_FILE successfully"
-                  rm -f "\$LOG_FILE" && log "Deleted \$LOG_FILE" || log "Failed to delete \$LOG_FILE"
-                else
-                  log "Failed to upload \$LOG_FILE"
-                fi
-              else
-                log "Skipping \$LOG_FILE (old or empty)"
-              fi
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and Push Frontend Image
+        working-directory: ./Frontend
+        run: |
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} . || true
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
+
+      - name: Build and Push Backend Image
+        working-directory: ./Backend
+        run: |
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} . || true
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
+
+    outputs:
+      version_tag: ${{ steps.version.outputs.tag }}
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to EC2 with Rollback
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+          EC2_USER: ubuntu
+          VERSION_TAG: ${{ needs.build.outputs.version_tag }}
+        run: |
+          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_INSTANCE_IP << EOF
+            # Update package list for Ubuntu
+            sudo apt-get update -y || true
+
+            # Install Docker if not present
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo apt-get install -y docker.io || true
+              sudo systemctl start docker || true
+              sudo systemctl enable docker || true
+              sudo usermod -aG docker \$EC2_USER || true
             fi
-          done
 
-          [[ "\$ANY_FILES_FOUND" = false ]] && log "No new log files found"
-          echo "\$CURRENT_TIME" > "\$LAST_RUN_FILE" && log "Updated timestamp" || log "Failed to update timestamp"
-          log "Finished log upload process"
-          INNER_EOF
+            # Install Docker Compose if not present
+            if ! command -v docker-compose >/dev/null 2>&1; then
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose || true
+              sudo chmod +x /usr/local/bin/docker-compose || true
+              sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+            fi
 
-          # Make script executable
-          chmod +x upload-logs-to-s3.sh || true
+            # Install AWS CLI if not present
+            if ! command -v aws >/dev/null 2>&1; then
+              sudo apt-get install -y awscli || true
+            fi
 
-          # Store current version as previous if it exists
-          if [ -f "last_successful_version.txt" ]; then
-            PREVIOUS_VERSION=\$(cat last_successful_version.txt)
-          else
-            PREVIOUS_VERSION="initial"
-          fi
+            # Login to Docker Hub
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin || true
 
-          # Debug: Check Docker status and images
-          echo "Docker version:"
-          docker --version || echo "Docker not installed or not running"
-          echo "Docker Compose version:"
-          docker-compose --version || echo "Docker Compose not installed"
-          echo "Current images:"
-          docker images || true
+            # Create project directory with sudo and fix ownership
+            sudo mkdir -p /home/$EC2_USER/teledata || { echo "Failed to create directory"; exit 1; }
+            sudo chown $EC2_USER:$EC2_USER /home/$EC2_USER/teledata || { echo "Failed to set ownership"; exit 1; }
+            cd /home/$EC2_USER/teledata || { echo "Failed to cd into directory"; exit 1; }
 
-          # Pull new images
-          docker-compose pull || true
+            # Write docker-compose.yaml
+            cat > docker-compose.yaml << 'INNER_EOF'
+            version: "3.8"
+            services:
+              frontend:
+                image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${VERSION_TAG}
+                ports:
+                  - "80:80"
+                restart: unless-stopped
+              backend:
+                image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${VERSION_TAG}
+                ports:
+                  - "8080:8080"
+                  - "14552-14559:14552-14559/udp"
+                  - "15000-15009:15000-15009/udp"
+                volumes:
+                  - /home/$EC2_USER/teledata/logs:/app/logs
+                restart: unless-stopped
+            volumes:
+              logs:
+            INNER_EOF
 
-          # Attempt deployment
-          echo "Deploying version ${{ needs.build.outputs.version_tag }}"
-          if docker-compose up -d; then
-            sleep 10
-            if curl -s http://localhost:80 >/dev/null && curl -s http://localhost:8080 >/dev/null; then
-              echo "Deployment successful, updating last successful version"
-              echo "${{ needs.build.outputs.version_tag }}" > last_successful_version.txt
-              ./upload-logs-to-s3.sh || true
+            # Write upload-logs-to-s3.sh
+            cat > upload-logs-to-s3.sh << 'INNER_EOF'
+            #!/bin/bash
+            LOG_DIR="/home/$EC2_USER/teledata/logs"
+            S3_BUCKET="teledata-log-bucket"
+            LAST_RUN_FILE="/home/$EC2_USER/teledata/last_run_timestamp.txt"
+            LOG_OUTPUT="/home/$EC2_USER/teledata/upload-logs-to-s3.log"
+
+            exec > >(tee -a "\$LOG_OUTPUT") 2>&1
+            log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] \$1"; }
+            log "Starting log upload process"
+
+            [[ ! -d "\$LOG_DIR" ]] && { log "Error: Log directory \$LOG_DIR not found"; exit 1; }
+            command -v aws >/dev/null 2>&1 || { log "Error: AWS CLI not installed"; exit 1; }
+
+            LAST_RUN=\$( [[ -f "\$LAST_RUN_FILE" ]] && cat "\$LAST_RUN_FILE" || echo 0 )
+            CURRENT_TIME=\$(date +%s)
+            ANY_FILES_FOUND=false
+
+            shopt -s nullglob
+            for LOG_FILE in "\$LOG_DIR"/*.log; do
+              if [[ -f "\$LOG_FILE" ]]; then
+                FILE_MOD_TIME=\$(stat -c %Y "\$LOG_FILE")
+                FILE_SIZE=\$(stat -c %s "\$LOG_FILE")
+                if [[ "\$FILE_MOD_TIME" -gt "\$LAST_RUN" && "\$FILE_SIZE" -gt 0 ]]; then
+                  ANY_FILES_FOUND=true
+                  S3_KEY="logs/\$(basename "\$LOG_FILE")"
+                  log "Uploading \$LOG_FILE to s3://\$S3_BUCKET/\$S3_KEY"
+                  if aws s3 cp "\$LOG_FILE" "s3://\$S3_BUCKET/\$S3_KEY" --quiet; then
+                    log "Uploaded \$LOG_FILE successfully"
+                    rm -f "\$LOG_FILE" && log "Deleted \$LOG_FILE" || log "Failed to delete \$LOG_FILE"
+                  else
+                    log "Failed to upload \$LOG_FILE"
+                  fi
+                else
+                  log "Skipping \$LOG_FILE (old or empty)"
+                fi
+              fi
+            done
+
+            [[ "\$ANY_FILES_FOUND" = false ]] && log "No new log files found"
+            echo "\$CURRENT_TIME" > "\$LAST_RUN_FILE" && log "Updated timestamp" || log "Failed to update timestamp"
+            log "Finished log upload process"
+            INNER_EOF
+
+            # Make script executable
+            chmod +x upload-logs-to-s3.sh || true
+
+            # Store current version as previous if it exists
+            if [ -f "last_successful_version.txt" ]; then
+              PREVIOUS_VERSION=\$(cat last_successful_version.txt)
             else
-              echo "Health check failed, rolling back to \$PREVIOUS_VERSION"
+              PREVIOUS_VERSION="initial"
+            fi
+
+            # Debug: Check Docker status and images
+            echo "Docker version:"
+            docker --version || echo "Docker not installed or not running"
+            echo "Docker Compose version:"
+            docker-compose --version || echo "Docker Compose not installed"
+            echo "Current images:"
+            docker images || true
+
+            # Pull new images
+            docker-compose pull || true
+
+            # Attempt deployment
+            echo "Deploying version ${{ needs.build.outputs.version_tag }}"
+            if docker-compose up -d; then
+              sleep 10
+              if curl -s http://localhost:80 >/dev/null && curl -s http://localhost:8080 >/dev/null; then
+                echo "Deployment successful, updating last successful version"
+                echo "${{ needs.build.outputs.version_tag }}" > last_successful_version.txt
+                ./upload-logs-to-s3.sh || true
+              else
+                echo "Health check failed, rolling back to \$PREVIOUS_VERSION"
+                sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
+                sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
+                docker-compose pull || true
+                docker-compose up -d || true
+                exit 0
+              fi
+            else
+              echo "Deployment failed, rolling back to \$PREVIOUS_VERSION"
               sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
               sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
               docker-compose pull || true
               docker-compose up -d || true
               exit 0
             fi
-          else
-            echo "Deployment failed, rolling back to \$PREVIOUS_VERSION"
-            sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
-            sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
-            docker-compose pull || true
-            docker-compose up -d || true
-            exit 0
-          fi
 
-          # Debug: Show running containers
-          echo "Running containers after deployment:"
-          docker ps -a || true
-        EOF
-        rm -f private_key.pem
+            # Debug: Show running containers
+            echo "Running containers after deployment:"
+            docker ps -a || true
+          EOF
+          rm -f private_key.pem
 
     - name: Upload Workflow Logs to S3
       if: always()
