@@ -1,59 +1,18 @@
-name: Simple Deploy to EC2
+name: Deploy to EC2
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       # Step 1: Checkout your code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Set up Node.js for frontend
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # Step 3: Set up JDK for backend
-      - name: Set up JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      # Step 4: Install frontend dependencies and build
-      - name: Build Frontend
-        working-directory: ./Frontend
-        run: |
-          npm ci
-          npm run build
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/teledata-frontend:${{ github.sha }} .
-
-      # Step 5: Build backend
-      - name: Build Backend
-        working-directory: ./Backend
-        run: |
-          mvn clean package
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/teledata-backend:${{ github.sha }} .
-
-      # Step 6: Login to Docker Hub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      # Step 7: Push Docker images
-      - name: Push Docker Images
-        run: |
-          docker push ${{ secrets.DOCKER_USERNAME }}/teledata-frontend:${{ github.sha }}
-          docker push ${{ secrets.DOCKER_USERNAME }}/teledata-backend:${{ github.sha }}
-
-      # Step 8: Deploy to EC2
+      # Step 2: Deploy to EC2
       - name: Deploy to EC2
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -62,9 +21,18 @@ jobs:
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+            echo "Connected to EC2"
+
+            # Install Git if not present
+            if ! command -v git >/dev/null 2>&1; then
+              echo "Installing Git..."
+              sudo apt-get update -y
+              sudo apt-get install -y git
+            fi
+
             # Install Docker if not present
             if ! command -v docker >/dev/null 2>&1; then
-              sudo apt-get update -y
+              echo "Installing Docker..."
               sudo apt-get install -y docker.io
               sudo systemctl start docker
               sudo systemctl enable docker
@@ -73,36 +41,32 @@ jobs:
 
             # Install Docker Compose if not present
             if ! command -v docker-compose >/dev/null 2>&1; then
+              echo "Installing Docker Compose..."
               sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
               sudo chmod +x /usr/local/bin/docker-compose
             fi
 
-            # Login to Docker Hub on EC2
+            # Clone or update the repo
+            if [ -d "/home/ubuntu/telemetry-v02" ]; then
+              echo "Updating existing repo..."
+              cd /home/ubuntu/telemetry-v02
+              git pull origin main
+            else
+              echo "Cloning repo..."
+              git clone https://github.com/Augustine423/telemetry-v02.git /home/ubuntu/telemetry-v02
+              cd /home/ubuntu/telemetry-v02
+            fi
+
+            # Login to Docker Hub (if your docker-compose.yaml uses private images)
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+            echo "Logged into Docker Hub"
 
-            # Create project directory
-            mkdir -p /home/ubuntu/app
-            cd /home/ubuntu/app
-
-            # Write simple docker-compose.yaml
-            cat > docker-compose.yaml << INNER_EOF
-            version: "3.8"
-            services:
-              frontend:
-                image: ${{ secrets.DOCKER_USERNAME }}/teledata-frontend:${{ github.sha }}
-                ports:
-                  - "80:80"
-              backend:
-                image: ${{ secrets.DOCKER_USERNAME }}/teledata-backend:${{ github.sha }}
-                ports:
-                  - "8080:8080"
-            INNER_EOF
-
-            # Start containers
-            docker-compose up -d
+            # Build and deploy using existing Dockerfile and docker-compose.yaml
+            echo "Building and deploying..."
+            docker-compose up -d --build
 
             # Show running containers
-            echo "Containers running:"
+            echo "Running containers:"
             docker ps
           EOF
           rm -f private_key.pem
