@@ -1,104 +1,3 @@
-name: Deploy to EC2 with Rollback
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-env:
-  AWS_REGION: us-east-1
-  DOCKER_REGISTRY: docker.io
-  IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}/teledata
-  FRONTEND_IMAGE: frontend
-  BACKEND_IMAGE: backend
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'Frontend/package-lock.json'
-
-      - name: Set up JDK and Maven
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: 'maven'
-
-      - name: Install Frontend Dependencies
-        working-directory: ./Frontend
-        run: npm ci || true
-
-      - name: Lint Frontend (Optional)
-        working-directory: ./Frontend
-        run: npm run lint || true
-
-      - name: Build Frontend
-        working-directory: ./Frontend
-        run: npm run build || true
-
-      - name: Build and Test Backend
-        working-directory: ./Backend
-        run: mvn clean package || true
-
-      - name: Generate Version Tag
-        id: version
-        run: echo "tag=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.DOCKER_REGISTRY }}
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Build and Push Frontend Image
-        working-directory: ./Frontend
-        run: |
-          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} .
-          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }}
-
-      - name: Build and Push Backend Image
-        working-directory: ./Backend
-        run: |
-          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} .
-          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }}
-
-    outputs:
-      version_tag: ${{ steps.version.outputs.tag }}
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Deploy to EC2 with Rollback
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -109,6 +8,8 @@ jobs:
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_INSTANCE_IP << EOF
+            echo "Starting deployment script"
+
             sudo apt-get update -y
 
             # Install Docker if not present
@@ -138,9 +39,10 @@ jobs:
             sudo mkdir -p /home/$EC2_USER/teledata || { echo "Failed to create directory"; exit 1; }
             sudo chown $EC2_USER:$EC2_USER /home/$EC2_USER/teledata || { echo "Failed to set ownership"; exit 1; }
             cd /home/$EC2_USER/teledata || { echo "Failed to cd into directory"; exit 1; }
+            echo "Directory setup complete"
 
             # Write docker-compose.yaml
-            cat > docker-compose.yaml << 'INNER_EOF'
+            cat > docker-compose.yaml << INNER_EOF
             version: "3.8"
             services:
               frontend:
@@ -160,9 +62,10 @@ jobs:
             volumes:
               logs:
             INNER_EOF
+            echo "docker-compose.yaml written"
 
             # Write upload-logs-to-s3.sh
-            cat > upload-logs-to-s3.sh << 'INNER_EOF'
+            cat > upload-logs-to-s3.sh << INNER_EOF
             #!/bin/bash
             LOG_DIR="/home/$EC2_USER/teledata/logs"
             S3_BUCKET="teledata-log-bucket"
@@ -205,8 +108,8 @@ jobs:
             echo "\$CURRENT_TIME" > "\$LAST_RUN_FILE" && log "Updated timestamp" || log "Failed to update timestamp"
             log "Finished log upload process"
             INNER_EOF
-
             chmod +x upload-logs-to-s3.sh
+            echo "upload-logs-to-s3.sh written"
 
             if [ -f "last_successful_version.txt" ]; then
               PREVIOUS_VERSION=\$(cat last_successful_version.txt)
@@ -222,6 +125,7 @@ jobs:
             docker images
 
             docker-compose pull
+            echo "Images pulled"
 
             echo "Deploying version ${{ needs.build.outputs.version_tag }}"
             if docker-compose up -d; then
@@ -251,8 +155,3 @@ jobs:
             docker ps -a
           EOF
           rm -f private_key.pem
-
-      - name: Upload Workflow Logs to S3
-        if: always()
-        run: |
-          aws s3 cp "upload-logs-to-s3.log" "s3://teledata-log-bucket/workflow-logs/$(date +%Y-%m-%d_%H-%M-%S)_upload.log" || echo "No logs to upload"
