@@ -72,14 +72,14 @@ jobs:
       - name: Build and Push Frontend Image
         working-directory: ./Frontend
         run: |
-          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} . || true
-          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} .
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }}
 
       - name: Build and Push Backend Image
         working-directory: ./Backend
         run: |
-          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} . || true
-          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} .
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }}
 
     outputs:
       version_tag: ${{ steps.version.outputs.tag }}
@@ -109,31 +109,30 @@ jobs:
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_INSTANCE_IP << EOF
-            # Update package list for Ubuntu
-            sudo apt-get update -y || true
+            sudo apt-get update -y
 
             # Install Docker if not present
             if ! command -v docker >/dev/null 2>&1; then
-              sudo apt-get install -y docker.io || true
-              sudo systemctl start docker || true
-              sudo systemctl enable docker || true
-              sudo usermod -aG docker \$EC2_USER || true
+              sudo apt-get install -y docker.io
+              sudo systemctl start docker
+              sudo systemctl enable docker
+              sudo usermod -aG docker \$EC2_USER
             fi
 
             # Install Docker Compose if not present
             if ! command -v docker-compose >/dev/null 2>&1; then
-              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose || true
-              sudo chmod +x /usr/local/bin/docker-compose || true
-              sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+              sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
             fi
 
             # Install AWS CLI if not present
             if ! command -v aws >/dev/null 2>&1; then
-              sudo apt-get install -y awscli || true
+              sudo apt-get install -y awscli
             fi
 
             # Login to Docker Hub
-            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin || true
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
             # Create project directory with sudo and fix ownership
             sudo mkdir -p /home/$EC2_USER/teledata || { echo "Failed to create directory"; exit 1; }
@@ -207,59 +206,53 @@ jobs:
             log "Finished log upload process"
             INNER_EOF
 
-            # Make script executable
-            chmod +x upload-logs-to-s3.sh || true
+            chmod +x upload-logs-to-s3.sh
 
-            # Store current version as previous if it exists
             if [ -f "last_successful_version.txt" ]; then
               PREVIOUS_VERSION=\$(cat last_successful_version.txt)
             else
               PREVIOUS_VERSION="initial"
             fi
 
-            # Debug: Check Docker status and images
             echo "Docker version:"
             docker --version || echo "Docker not installed or not running"
             echo "Docker Compose version:"
             docker-compose --version || echo "Docker Compose not installed"
             echo "Current images:"
-            docker images || true
+            docker images
 
-            # Pull new images
-            docker-compose pull || true
+            docker-compose pull
 
-            # Attempt deployment
             echo "Deploying version ${{ needs.build.outputs.version_tag }}"
             if docker-compose up -d; then
               sleep 10
               if curl -s http://localhost:80 >/dev/null && curl -s http://localhost:8080 >/dev/null; then
                 echo "Deployment successful, updating last successful version"
                 echo "${{ needs.build.outputs.version_tag }}" > last_successful_version.txt
-                ./upload-logs-to-s3.sh || true
+                ./upload-logs-to-s3.sh
               else
                 echo "Health check failed, rolling back to \$PREVIOUS_VERSION"
                 sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
                 sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
-                docker-compose pull || true
-                docker-compose up -d || true
+                docker-compose pull
+                docker-compose up -d
                 exit 0
               fi
             else
               echo "Deployment failed, rolling back to \$PREVIOUS_VERSION"
               sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
               sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:\$PREVIOUS_VERSION|" docker-compose.yaml
-              docker-compose pull || true
-              docker-compose up -d || true
+              docker-compose pull
+              docker-compose up -d
               exit 0
             fi
 
-            # Debug: Show running containers
             echo "Running containers after deployment:"
-            docker ps -a || true
+            docker ps -a
           EOF
           rm -f private_key.pem
 
-    - name: Upload Workflow Logs to S3
-      if: always()
-      run: |
-        aws s3 cp "upload-logs-to-s3.log" "s3://teledata-log-bucket/workflow-logs/$(date +%Y-%m-%d_%H-%M-%S)_upload.log" || echo "No logs to upload"
+      - name: Upload Workflow Logs to S3
+        if: always()
+        run: |
+          aws s3 cp "upload-logs-to-s3.log" "s3://teledata-log-bucket/workflow-logs/$(date +%Y-%m-%d_%H-%M-%S)_upload.log" || echo "No logs to upload"
