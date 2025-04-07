@@ -1,153 +1,210 @@
-name: CI/CD Pipeline
+name: Deploy to EC2
 
 on:
   push:
-    branches:
-      - main
+    branches: [ "main" ]
   pull_request:
-    branches:
-      - main
+    branches: [ "main" ]
 
 env:
-  DOCKER_COMPOSE_VERSION: "2.24.7"
-  APP_DIR: "/home/ubuntu/app"
-  SERVICE_NAME: "app"
-  AWS_REGION: ${{ secrets.AWS_REGION }}  # Optional: Add this secret if needed
+  AWS_REGION: ap-southeast-1                    # Your AWS region (for S3)
+  DOCKER_REGISTRY: docker.io               # Use Docker Hub; switch to ECR if preferred
+  IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}/teledata
+  FRONTEND_IMAGE: frontend
+  BACKEND_IMAGE: backend
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # For versioning
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: 'Frontend/package-lock.json'
+
+      - name: Set up JDK and Maven
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'maven'
+
+      - name: Build and Test Frontend
+        working-directory: ./Frontend
+        run: |
+          npm ci
+          npm run lint --if-present
+          npm run test --if-present
+          npm run build
+
+      - name: Build and Test Backend
+        working-directory: ./Backend
+        run: |
+          mvn clean package
+
+      - name: Generate Version Tag
+        id: version
+        run: echo "tag=$(git describe --tags --always --dirty)" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Install Docker Compose
-        run: |
-          sudo curl -L "https://github.com/docker/compose/releases/download/v${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          docker-compose --version
-
-      - name: Cache Docker layers
-        uses: actions/cache@v4
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build Docker images
+      - name: Build and Push Frontend Image
+        working-directory: ./Frontend
         run: |
-          docker-compose build --parallel
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} .
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }}
 
-      - name: Run tests
+      - name: Build and Push Backend Image
+        working-directory: ./Backend
         run: |
-          docker-compose up -d
-          # Add your test commands here, e.g.:
-          # docker-compose exec ${SERVICE_NAME} npm test
-          docker-compose down
+          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} .
+          docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }}
+
+    outputs:
+      version_tag: ${{ steps.version.outputs.tag }}
 
   deploy:
-    needs: build-and-test
     runs-on: ubuntu-latest
+    needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Debug Secrets
-        run: |
-          echo "EC2_HOST length: ${#EC2_HOST}"
-          echo "EC2_USERNAME length: ${#EC2_USERNAME}"
-          echo "EC2_SSH_KEY length: ${#EC2_SSH_KEY}"
-          echo "AWS_REGION: ${AWS_REGION:-'Not set'}"
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy to EC2 via SSH
         env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+          EC2_USER: ubuntu  # Adjust based on your AMI (e.g., ubuntu)
+          VERSION_TAG: ${{ needs.build.outputs.version_tag }}
+        run: |
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_INSTANCE_IP << 'EOF'
+            # Ensure Docker and Docker Compose are installed
+            sudo yum install -y docker || sudo apt-get install -y docker.io
+            sudo systemctl start docker
+            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 30s
-          debug: true
-          script: |
-            set -e
+            # Login to Docker Hub on EC2
+            echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin
 
-            echo "🔄 Updating system and installing dependencies..."
-            sudo apt update -y && sudo apt upgrade -y
+            # Create project directory
+            mkdir -p /home/$EC2_USER/teledata
+            cd /home/$EC2_USER/teledata
 
-            if ! command -v docker >/dev/null 2>&1; then
-              echo "🐳 Installing Docker..."
-              curl -fsSL https://get.docker.com | sudo sh
-              sudo usermod -aG docker ${USER}
-              sudo systemctl enable docker --now
+            # Write docker-compose.yaml
+            cat > docker-compose.yaml << 'INNER_EOF'
+            version: "3.8"
+            services:
+              frontend:
+                image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${VERSION_TAG}
+                ports:
+                  - "80:80"
+                restart: unless-stopped
+              backend:
+                image: ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${VERSION_TAG}
+                ports:
+                  - "8080:8080"
+                  - "14552-14559:14552-14559/udp"
+                  - "15000-15009:15000-15009/udp"
+                volumes:
+                  - /home/$EC2_USER/teledata/logs:/app/logs
+                restart: unless-stopped
+            volumes:
+              logs:
+            INNER_EOF
+
+            # Write upload-logs-to-s3.sh
+            cat > upload-logs-to-s3.sh << 'INNER_EOF'
+            #!/bin/bash
+            LOG_DIR="/home/$EC2_USER/teledata/logs"
+            S3_BUCKET="teledata-log-bucket"
+            LAST_RUN_FILE="/home/$EC2_USER/teledata/last_run_timestamp.txt"
+            LOG_OUTPUT="/home/$EC2_USER/teledata/upload-logs-to-s3.log"
+
+            exec > >(tee -a "$LOG_OUTPUT") 2>&1
+            log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] \$1"; }
+            log "Starting log upload process"
+
+            [[ ! -d "$LOG_DIR" ]] && { log "Error: Log directory $LOG_DIR not found"; exit 1; }
+            command -v aws >/dev/null 2>&1 || { log "Error: AWS CLI not installed"; exit 1; }
+
+            LAST_RUN=\$( [[ -f "$LAST_RUN_FILE" ]] && cat "$LAST_RUN_FILE" || echo 0 )
+            CURRENT_TIME=\$(date +%s)
+            ANY_FILES_FOUND=false
+
+            shopt -s nullglob
+            for LOG_FILE in "$LOG_DIR"/*.log; do
+              if [[ -f "$LOG_FILE" ]]; then
+                FILE_MOD_TIME=\$(stat -c %Y "$LOG_FILE")
+                FILE_SIZE=\$(stat -c %s "$LOG_FILE")
+                if [[ "$FILE_MOD_TIME" -gt "$LAST_RUN" && "$FILE_SIZE" -gt 0 ]]; then
+                  ANY_FILES_FOUND=true
+                  S3_KEY="logs/\$(basename "$LOG_FILE")"
+                  log "Uploading $LOG_FILE to s3://$S3_BUCKET/$S3_KEY"
+                  if aws s3 cp "$LOG_FILE" "s3://$S3_BUCKET/$S3_KEY" --quiet; then
+                    log "Uploaded $LOG_FILE successfully"
+                    rm -f "$LOG_FILE" && log "Deleted $LOG_FILE" || log "Failed to delete $LOG_FILE"
+                  else
+                    log "Failed to upload $LOG_FILE"
+                  fi
+                else
+                  log "Skipping $LOG_FILE (old or empty)"
+                fi
+              fi
+            done
+
+            [[ "$ANY_FILES_FOUND" = false ]] && log "No new log files found"
+            echo "$CURRENT_TIME" > "$LAST_RUN_FILE" && log "Updated timestamp" || log "Failed to update timestamp"
+            log "Finished log upload process"
+            INNER_EOF
+
+            # Make script executable
+            chmod +x upload-logs-to-s3.sh
+
+            # Install AWS CLI if not present
+            if ! command -v aws >/dev/null 2>&1; then
+              sudo yum install -y awscli || sudo apt-get install -y awscli
             fi
 
-            if ! command -v docker-compose >/dev/null 2>&1; then
-              echo "🐙 Installing Docker Compose..."
-              sudo curl -L "https://github.com/docker/compose/releases/download/v${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-            fi
+            # Pull and deploy containers
+            docker-compose pull
+            docker-compose up -d
 
-            echo "📁 Preparing application directory..."
-            mkdir -p ${{ env.APP_DIR }}
-            cd ${{ env.APP_DIR }}
+            # Run log upload script
+            ./upload-logs-to-s3.sh
+          EOF
+          rm -f private_key.pem
 
-            echo "🔄 Syncing repository..."
-            if [ -d ".git" ]; then
-              git fetch --all
-              git checkout main
-              git reset --hard origin/main
-              git clean -fd
-            else
-              git clone https://github.com/${{ github.repository }} .
-            fi
-
-            echo "🧹 Cleaning up Docker resources..."
-            docker image prune -f
-            docker system prune -f --volumes
-
-            echo "🏗️ Deploying application..."
-            docker-compose down --remove-orphans --volumes
-            docker-compose build --no-cache
-            docker-compose up -d --force-recreate --remove-orphans
-
-            echo "📅 Setting up cron job..."
-            CRON_FILE="/tmp/crontab.tmp"
-            CRON_JOB="*/5 * * * * ${{ env.APP_DIR }}/upload-logs-to-s3.sh"
-            (crontab -l 2>/dev/null | grep -v 'upload-logs-to-s3.sh' || true; echo "$CRON_JOB") > "$CRON_FILE"
-            crontab "$CRON_FILE"
-            rm -f "$CRON_FILE"
-
-            echo "✅ Deployment completed!"
-
-      - name: Verify Deployment
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          timeout: 30s
-          debug: true
-          script: |
-            set -e
-            cd ${{ env.APP_DIR }}
-            sleep 5
-            if ! docker-compose ps | grep "Up" >/dev/null 2>&1; then
-              echo "❌ Deployment failed: Containers not running!"
-              docker-compose logs
-              exit 1
-            fi
-            echo "✓ Deployment verified successfully!"
+      - name: Upload Workflow Logs to S3
+        if: always()
+        run: |
+          aws s3 cp "upload-logs-to-s3.log" "s3://teledata-log-bucket/workflow-logs/$(date +%Y-%m-%d_%H-%M-%S)_upload.log" || echo "No logs to upload"
