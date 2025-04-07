@@ -1,7 +1,6 @@
-import VideoGalleryListPage from "../features/dashboard/datamanage/videoGallery/pages/VideoGalleryListPage";
-import VideoGalleryRegisterPage from "../features/dashboard/datamanage/videoGallery/pages/VideoGalleryRegisterPage";
 
-
+import VideoGalleryListPage from "../features/dashboard/flightLog/videoGallery/pages/VideoGalleryListPage"
+import VideoGalleryRegisterPage from "../features/dashboard/flightLog/videoGallery/pages/VideoGalleryRegisterPage"
 
 
 const videoGalleryRoute=[

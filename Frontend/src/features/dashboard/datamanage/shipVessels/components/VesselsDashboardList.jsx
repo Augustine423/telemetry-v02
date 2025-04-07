@@ -1,4 +1,4 @@
-import { LayoutGrid, Menu, Search } from "lucide-react";
+import { LayoutGrid, Menu, Printer, Search } from "lucide-react";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { Link } from "react-router-dom";
@@ -15,6 +15,27 @@ const VesselsDashboardList = () => {
   const handleGridClick = (button) => {
     setActiveButton2(button);
   };
+
+  const handlePrint = () => {
+    const printElement = document.getElementById("printArea");
+
+    if (!printElement) {
+        console.error("Error: printArea element not found!");
+        return;
+    }
+
+    const originalContent = document.body.innerHTML;
+    document.body.innerHTML = printElement.outerHTML;
+
+    window.print();
+    document.body.innerHTML = originalContent; // Restore the original content
+
+    // Timeout သုံးပြီး Original Content ကို Restore ပြန်လုပ်
+    setTimeout(() => {
+      document.body.innerHTML = originalContent;
+      window.location.reload(); // မလိုရင် ဒီလို Refresh လုပ်ပါ
+  }, 100);
+};
 
   return (
     <>
@@ -85,7 +106,14 @@ const VesselsDashboardList = () => {
               >
                 <LayoutGrid className="w-6 h-6" />
               </button>
+             
             </div>
+            <button
+                className=" flex justify-center items-center gap-3 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center "
+                onClick={handlePrint}
+              >
+                <Printer className="text-gray-400" /> <p>Print</p>
+              </button>
           </div>
         )}
       </header>

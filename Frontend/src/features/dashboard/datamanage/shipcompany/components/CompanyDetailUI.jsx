@@ -6,7 +6,6 @@ import { useEffect } from "react";
 import VesselDetailTableUI from "./VesselDetailTableUI";
 import { fetchVesselsByCompanyId } from "../../../../../stores/informationData/vesselSlice";
 
-
 const CompanyDetailUI = () => {
   const { id } = useParams();
 
@@ -14,7 +13,7 @@ const CompanyDetailUI = () => {
 
   // Fetch company details when the component mounts
   useEffect(() => {
-    dispatch(fetchCompanyById(id),fetchVesselsByCompanyId(id));
+    dispatch(fetchCompanyById(id), fetchVesselsByCompanyId(id));
   }, [dispatch, id]);
 
   // Access the fetched company details from the Redux store
@@ -37,15 +36,12 @@ const CompanyDetailUI = () => {
     return <p className="text-red-500">Company not found.</p>;
   }
 
-  console.log("Company ID:", currentCompany);//localhost:8080/aioceaneye/companies/10
-
+  console.log("Company ID:", currentCompany); //localhost:8080/aioceaneye/companies/10
 
   return (
     <>
-      
-
       {/* Company Details Card */}
-      <div className="bg-white rounded-md shadow-md p-6 mb-6">
+      <div id="printArea" className="bg-white rounded-md shadow-md p-6 mb-6">
         <h2 className="text-lg font-bold mb-6">Companies name</h2>
 
         <div className="grid grid-cols-3 gap-x-6 gap-y-4">
@@ -61,7 +57,7 @@ const CompanyDetailUI = () => {
           </div>
 
           {/* Company Details */}
-          <div className="col-span-2 grid grid-cols-2 gap-x-8 gap-y-4 border-b border-gray-300">
+          <div className="grid grid-cols-2 gap-4 mb-6 mt-4 col-span-2 border-b">
             <div className="flex justify-between items-center border-b border-gray-300 pb-2">
               <span className="text-sm font-medium">Companies</span>
               <span className="text-sm text-gray-600">
@@ -146,12 +142,11 @@ const CompanyDetailUI = () => {
         <div className="pt-12">
           <h2 className="text-lg font-bold mb-4">Vessels List</h2>
 
-          <VesselDetailTableUI  companyId={id} />
-
-          {/* Pagination */}
-          <div className="flex justify-center mt-4">
-            <Pagination />
-          </div>
+          <VesselDetailTableUI companyId={id} />
+        </div>
+        {/* Pagination */}
+        <div className="flex justify-center mt-4">
+          <Pagination />
         </div>
       </div>
     </>

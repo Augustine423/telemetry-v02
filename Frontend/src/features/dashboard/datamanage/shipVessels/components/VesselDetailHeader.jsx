@@ -1,6 +1,6 @@
 
 
-import { Edit } from "lucide-react";
+import { Edit, Printer } from "lucide-react";
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -49,6 +49,22 @@ const VesselDetailHeader = () => {
     }
   };
 
+
+  const handlePrint = () => {
+    const printElement = document.getElementById("printArea");
+
+    if (!printElement) {
+        console.error("Error: printArea element not found!");
+        return;
+    }
+
+    const originalContent = document.body.innerHTML;
+    document.body.innerHTML = printElement.outerHTML;
+
+    window.print();
+    document.body.innerHTML = originalContent; // Restore the original content
+};
+
   return (
     <>
       <div className="flex gap-8 pt-6 px-8 border-b border-gray-200 pb-4">
@@ -79,7 +95,7 @@ const VesselDetailHeader = () => {
       {/* Header */}
 
       <header className="flex items-center justify-between py-4 lg:gap-4 pl-10">
-        <h1 className="text-2xl font-semibold text-black">
+        <h1 className="text-3xl font-bold">
           {selectedItem.selectedItem}{" "}
           {activeButton === "register" ? "Register" : "Detail Info"}
         </h1>
@@ -87,6 +103,12 @@ const VesselDetailHeader = () => {
           <div className="flex items-center space-x-4">
             {/* View Toggle (Grid vs Table) */}
             <div className="flex items-center space-x-2 pr-10">
+            <button
+                className=" flex justify-center items-center gap-3 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center "
+                onClick={handlePrint}
+              >
+                <Printer className="text-gray-400" /> <p>Print</p>
+              </button>
               <button
                 onClick={handleDeleteBtn}
                 className={`p-2 ${

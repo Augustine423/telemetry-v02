@@ -23,6 +23,7 @@ const CompanyRegister = () => {
   } = useForm();
 
   const onSubmit = async (data) => {
+    console.log(data)
     try {
       const formData = new FormData();
 
@@ -108,6 +109,7 @@ const CompanyRegister = () => {
                   </label>
                   <div className="flex-1">
                     <input
+                     id="company-name" // Add unique ID
                       type="text"
                       {...register("coName", {
                         required: "Company Name is required",
@@ -123,8 +125,52 @@ const CompanyRegister = () => {
                   </div>
                 </div>
 
+                 {/* Business No */}
+                 <div className="flex items-center col-span-1 w-full">
+                  <label className="w-24 text-sm font-medium mb-2">
+                  Business No
+                  </label>
+                  <div className="flex-1">
+                  <input
+                      type="text"
+                      {...register("coRegisterNo", {
+                        required: "number is required",
+                      })}
+                      placeholder="Please Enter"
+                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {errors.coRegisterNo && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.coRegisterNo.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
+                 {/*File No */}
+                 <div className="flex items-start">
+                  <label className="w-32 text-sm font-medium mt-2">
+                   File No
+                  </label>
+                  <div className="flex-1">
+                  <input
+                        type="text"
+                        {...register("coRegisterFile", {
+                          required: "Home Link is required",
+                        })}
+                        placeholder="Please Enter"
+                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {errors.coRegisterFile && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.coRegisterFile.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                
                 {/* Business No */}
-                <div className="flex items-start">
+                {/* <div className="flex items-start">
                   <label className="w-40 text-sm font-medium mt-2">
                     Business No
                   </label>
@@ -143,7 +189,7 @@ const CompanyRegister = () => {
                       </p>
                     )}
                   </div>
-                  {/* prepare from become api */}
+                  
                   <div className="flex items-center col-span-1 w-full">
                     <label className="w-24 text-sm font-medium mb-2">
                       File No
@@ -159,28 +205,9 @@ const CompanyRegister = () => {
                       />
                     </div>
                   </div>
-                </div>
+                </div> */}
 
-                {/* Country */}
-                <div className="flex items-center">
-                  <label className="w-32 text-sm font-medium">Country</label>
-
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      {...register("coCountry", {
-                        required: "Country  is required",
-                      })}
-                      placeholder="Please Enter"
-                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    {errors.coCountry && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.coCountry.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
+               
 
                 {/* Homepage */}
                 <div className="flex items-center col-span-1 w-full">
@@ -199,6 +226,47 @@ const CompanyRegister = () => {
                     {errors.coHomePage && (
                       <p className="text-red-500 text-sm mt-1">
                         {errors.coHomePage.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                 {/* Country */}
+                 <div className="flex items-center">
+                  <label className="w-32 text-sm font-medium">Country</label>
+
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      {...register("coCountry", {
+                        required: "Country  is required",
+                      })}
+                      placeholder="Please Enter"
+                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {errors.coCountry && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.coCountry.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                 {/* Employees */}
+                 <div className="flex items-center col-span-1 w-full">
+                  <label className="w-24 text-sm font-medium mt-2">
+                    Employees
+                  </label>
+                  <div className="flex-1">
+                    <input
+                      type="text"
+                      {...register("coEmployees", {
+                        required: "Employees is required",
+                      })}
+                      placeholder="Please Enter"
+                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    {errors.coEmployees && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {errors.coEmployees.message}
                       </p>
                     )}
                   </div>
@@ -227,27 +295,29 @@ const CompanyRegister = () => {
                   </div>
                 </div>
 
-                {/* Employees */}
-                <div className="flex items-center col-span-1 w-full">
-                  <label className="w-24 text-sm font-medium mt-2">
-                    Employees
+                 {/* E-mail */}
+                 <div className="flex items-center col-span-1 w-full">
+                 <label className="w-24 text-sm font-medium mb-2">
+                    E-mail
                   </label>
                   <div className="flex-1">
                     <input
-                      type="text"
-                      {...register("coEmployees", {
-                        required: "Employees is required",
+                      type="email"
+                      {...register("coUserEmail", {
+                        required: "Email is required",
                       })}
                       placeholder="Please Enter"
                       className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                    {errors.coEmployees && (
+                    {errors.coUserEmail && (
                       <p className="text-red-500 text-sm mt-1">
-                        {errors.coEmployees.message}
+                        {errors.coUserEmail.message}
                       </p>
                     )}
                   </div>
                 </div>
+
+               
 
                 {/* Address */}
                 <div className="flex items-center col-span-2 w-full">
@@ -281,7 +351,7 @@ const CompanyRegister = () => {
                       {...register("coTel", {
                         required: "Company Phone is required",
                         pattern: {
-                          value: /^\+\d{1}-\d{3}-\d{3}-\d{4}$/, // Regex for +<countryCode>-XXX-XXX-XXXX
+                          value: /^\+\d{1,3}-\d{3}-\d{3}-\d{4}$/, // Regex for +<countryCode>-XXX-XXX-XXXX
                           message:
                             "Phone number must follow the format: +<countryCode>-XXX-XXXX-XXXX",
                         },
@@ -298,16 +368,15 @@ const CompanyRegister = () => {
                 </div>
 
                 {/* FAX No */}
-
-                <div className="flex items-start">
-                  <label className="w-32 text-sm font-medium mt-2">
+                <div className="flex items-center col-span-1 w-full">
+                <label className="w-24 text-sm font-medium mb-2">
                     FAX No
                   </label>
                   <div className="flex-1">
                     <input
                       type="text"
                       {...register("coFax", {
-                        required: "FAX number is required",
+                        required: "FAX  is required",
                       })}
                       placeholder="Please Enter"
                       className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -344,8 +413,8 @@ const CompanyRegister = () => {
 
                 {/* Second Phone No */}
 
-                <div className="flex items-start">
-                  <label className="w-32 text-sm font-medium mt-2">
+                <div className="flex items-center col-span-1 w-full">
+                 <label className="w-24 text-sm font-medium mb-2">
                     CEO Phone No
                   </label>
 
@@ -371,27 +440,7 @@ const CompanyRegister = () => {
                   </div>
                 </div>
 
-                {/* E-mail */}
-                <div className="flex items-start">
-                  <label className="w-32 text-sm font-medium mt-2">
-                    E-mail
-                  </label>
-                  <div className="flex-1">
-                    <input
-                      type="email"
-                      {...register("coUserEmail", {
-                        required: "Email is required",
-                      })}
-                      placeholder="Please Enter"
-                      className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
-                    />
-                    {errors.coUserEmail && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.coUserEmail.message}
-                      </p>
-                    )}
-                  </div>
-                </div>
+               
               </div>
             </div>
           </div>

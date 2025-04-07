@@ -35,7 +35,7 @@ const VesselRegisterHeader = () => {
       {/* Header */}
 
       <header className="flex flex-col lg:flex-row items-center justify-between py-6 lg:gap-4 pl-10">
-        <h1 className="text-2xl font-semibold text-black">
+        <h1 className="text-3xl font-bold">
           {selectedItem.selectedItem}{" "}
           {activeButton === "register" ? "Register" : "Detail Info"}
         </h1>

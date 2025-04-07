@@ -1,11 +1,14 @@
-import ReportListPage from "../features/dashboard/workmanage/pages/ReportListPage";
+import React from 'react'
+import ReportDetail from '../components/Report/ReportDetail'
+import ReportDetailHeader from "../../workmanage/components/Report/ReportDetailHeader"
+const ReportDetailPage = () => {
+  return (
+    <>
+      <ReportDetailHeader />
+      <ReportDetail/>
+    </>
+    
+  )
+}
 
-
-const reportlistRoute = [
-  {
-    path: "report",
-   element:<ReportListPage/>
-  },
-];
-
-export default reportlistRoute;
+export default ReportDetailPage

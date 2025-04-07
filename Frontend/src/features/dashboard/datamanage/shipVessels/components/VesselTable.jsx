@@ -9,13 +9,16 @@ const VesselTable = () => {
     (state) => state.vessels || {}
   );
 
+ 
+
   if (loading) return <p>Loading...</p>;
   if (error) return <p>Error: {error}</p>;
+  
 
   return (
     <>
-      <div className=" shadow-xl rounded-md w-full py-8">
-        <div className="overflow-x-auto bg-white border rounded-md">
+      <div className="bg-white rounded-lg shadow-md px-6  md:p-8 h-full xl:mb-10 w-full ">
+        <div id="printArea" className="overflow-x-auto bg-white  rounded-md">
           <table className="w-full">
             <thead className="bg-gray-50 m-4">
               <tr className=" bg-gray-200 p-6 mx-4">

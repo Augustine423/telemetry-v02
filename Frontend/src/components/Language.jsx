@@ -53,7 +53,7 @@ export const translations = {
       work: "Work",
       flightRecord: "Flight Record",
       workAssignment: "Work Assignment",
-      pilotWorkSchedule: "Pilot Work Schedule",
+      pilotWorkSchedule: "Work Schedule",
       report: "Report",
       document: "Document",
       dashboard: "Dashboard",

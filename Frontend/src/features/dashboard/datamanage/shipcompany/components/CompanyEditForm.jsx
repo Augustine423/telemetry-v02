@@ -10,7 +10,6 @@ import {
 } from "../../../../../stores/informationData/companySlice.js";
 
 const CompanyEditForm = () => {
-
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { id } = useParams(); // Get the company ID from the URL
@@ -24,7 +23,7 @@ const CompanyEditForm = () => {
 
   const [company, setUpdatedCompany] = useState(null); // State to hold updated company data
 
- const currentCompany = useSelector((state) => state.companies.currentCompany); // Access the current company data
+  const currentCompany = useSelector((state) => state.companies.currentCompany); // Access the current company data
 
   // Fetch the company data when the component mounts
   useEffect(() => {
@@ -345,7 +344,9 @@ const CompanyEditForm = () => {
                   <div className="flex-1">
                     <input
                       type="email"
-                      {...register("coUserEmail", { required: "UserEmail is required" })}
+                      {...register("coUserEmail", {
+                        required: "UserEmail is required",
+                      })}
                       placeholder="Please Enter"
                       className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />

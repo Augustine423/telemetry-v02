@@ -1,30 +1,10 @@
-import { Edit } from "lucide-react";
 import { useState } from "react";
 import { useSelector } from "react-redux";
-import { Link, useNavigate, useParams } from "react-router-dom";
-import { HiOutlineTrash } from "react-icons/hi2";
+import { Link } from "react-router-dom";
 
 const CompanyRegisterHeader = () => {
-  const { id } = useParams();
-
-  const { companies } = useSelector((state) => state.companies || {});
-
-  const currentCompany = companies?.find((company) => company.id == id);
-
   const selectedItem = useSelector((state) => state.selectedItem); // Global state
   const [activeButton] = useState("register");
-  const [activeButton2, setActiveButton2] = useState(""); // Fixed state
-
- 
-
-  const navigate = useNavigate();
-
-  
-
-  const handleGridClick = (button) => {
-    setActiveButton2(button);
-  };
-
 
   // console.log("Found Company:", currentCompany);
   return (
@@ -56,39 +36,10 @@ const CompanyRegisterHeader = () => {
       {/* Header */}
 
       <header className="flex flex-col lg:flex-row items-center justify-between py-6 lg:gap-4 pl-10">
-        <h1 className="text-2xl font-semibold text-black">
+        <h1 className="text-3xl font-bold">
           {selectedItem.selectedItem}{" "}
           {activeButton === "register" ? "Register" : "Detail Info"}
         </h1>
-
-        {/* Action Buttons: Trash & Edit */}
-        {activeButton !== "register" && (
-          <div className="flex items-center space-x-6">
-            <button
-              onClick={ ()=>handleGridClick("transh")}
-              className={`p-2 rounded-lg transition ${
-                activeButton2 === "trash"
-                  ? "text-primary bg-gray-100"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <HiOutlineTrash className="w-6 h-6" />
-            </button>
-            <button
-              onClick={() => {
-                console.log("Navigating to:", `/dashboard/company-edit/${id}`);
-                navigate(`/dashboard/company-edit/${currentCompany.id}`);
-              }}
-              className={`p-2 rounded-lg transition ${
-                activeButton2 === "edit"
-                  ? "text-primary bg-gray-100"
-                  : "text-gray-600 hover:bg-gray-100"
-              }`}
-            >
-              <Edit className="w-6 h-6" />
-            </button>
-          </div>
-        )}
       </header>
     </>
   );

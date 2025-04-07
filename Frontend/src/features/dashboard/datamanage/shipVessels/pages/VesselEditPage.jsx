@@ -1,7 +1,13 @@
+import VesselEditForm from "../components/VesselEditForm"
+import VesselEditHeader from "../components/VesselEditHeader"
 
 const VesselEditPage = () => {
   return (
-    <div>VesselEditPage</div>
+    <>
+    <VesselEditHeader/>
+
+    <VesselEditForm/>
+    </>
   )
 }
 

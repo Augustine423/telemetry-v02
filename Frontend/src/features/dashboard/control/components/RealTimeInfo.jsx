@@ -14,18 +14,24 @@ import useTranslations from "../../../../components/Language";
 import Footer from "../../../../components/Footer";
 import FlightData from "./FlightData";
 
-
 const RealTimeInfo = () => {
   // const [ships, setShips] = useState([]);
   const [drones, setDrones] = useState({});
+  const [selectedDrone, setSelectedDrone] = useState({});
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
+  const [altt, setAltt] = useState(0);
+  const [airSpeed, setAirSpeed] = useState(0);
+  const [groundSpeed, setGroundSpeed] = useState(0);
+  const [battery, setBattery] = useState(0);
   const [systemID, setSystemID] = useState("");
   const [shipPosition, setShipPosition] = useState([]);
   const reconnectInterval = useRef(null);
 
+  console.log(selectedDrone)
 
-  console.log(shipPosition)
+  console.log(systemID)
+  // console.log(shipPosition)
   // const [droneStates, setDroneStates] = useState(
   //   data.drones.reduce((acc, drone) => {
   //     acc[drone.id] = {
@@ -84,7 +90,7 @@ const RealTimeInfo = () => {
   useEffect(() => {
     const connectWebSocket = () => {
       console.log("Attempting WebSocket connection...");
-      const wsUrl = "ws://localhost:8080/telemetry";
+      const wsUrl = "ws://52.78.238.179:8080/telemetry";
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {
@@ -102,18 +108,30 @@ const RealTimeInfo = () => {
             const updatedDrones = {};
             let updatedLat = null;
             let updatedLon = null;
+            let updatedAlt = null;
+            let updatedAirSpeed = null;
+            let updatedGroundSpeed = null;
+            let updatedBattery = null;
             // const updatedShipPosition = [];
             data.drones.forEach((drone) => {
               drone.waypoints = Array.isArray(drone.waypoints) ? drone.waypoints : [];
               updatedDrones[drone.GCS_IP] = drone;
               updatedLat = `${Math.abs(drone.lat)}° ${drone.lat >= 0 ? "N" : "S"}`;
-              updatedLon = `${Math.abs(drone.lon)}° ${drone.lat >= 0 ? "E" : "W"}`;;
-              setShipPosition([...shipPosition, drone.home_location]);
+              updatedLon = `${Math.abs(drone.lon)}° ${drone.lat >= 0 ? "E" : "W"}`;
+              updatedAlt = drone.alt;
+              updatedAirSpeed = drone.airspeed;
+              updatedGroundSpeed = drone.ground_speed;
+              updatedBattery = drone.battery_voltage;
+              const newShipPositions = data.drones.map((drone) => drone.home_location);
+              setShipPosition(newShipPositions);
             });
             setDrones(updatedDrones);
             setLat(updatedLat);
             setLon(updatedLon);
-            
+            setAltt(updatedAlt);
+            setAirSpeed(updatedAirSpeed);
+            setGroundSpeed(updatedGroundSpeed);
+            setBattery(updatedBattery);
 
             // setShipPosition(updatedShipPosition);
             console.log(updatedDrones);
@@ -163,31 +181,39 @@ const [videoView, setVideoView] = useState(false);
     {
       Vessel: "Serena Ver.2",
       [t.captain]: "name",
-      [t.country]: "KOREA",
-      Mate: "name",
-      IMO: "MDT-V290",
-      "Call Sign": "SXZB",
-      MMSI: "MDT-V290",
-      Yield: "300t",
       Latitude: lat,
       Longitude: lon,
     },
   ];
 
-  const droneData = [
+  const droneDataStatic = [
     {
-      Model: "MDT-V290",
+      "Model": "MDT-V290",
       "Serial No": "name",
-      "Drone ID": "123DFSEW34",
-      "Call Sign": "SXZB",
-    },
-    {
-      Model: "MDT-V290",
-      "Serial No": "name",
-      "Drone ID": "456GHJK89",
-      "Call Sign": "SXZB",
-    },
+      Latitude: lat,
+      Longitude: lon,
+      Altitude: altt+" M",
+    }
   ];
+
+  const droneRealTimeData = [
+    {
+      "Latitude": lat,
+      "Longitude": lon,
+      "Altitude": altt+" M",
+      "Airspeed(m/s)": airSpeed,
+      "Groundspeed(m/s)": groundSpeed,
+      "Battery(V)": battery,
+    }
+  ];
+
+  console.log(altt)
+
+  const handleSelectedDrone = (systemID) => {
+    const clickedDrone = drones.find((drone) => drone.systemid === systemID) || null;
+
+    setSelectedDrone(clickedDrone); 
+  }
 
 
   return (
@@ -215,14 +241,15 @@ const [videoView, setVideoView] = useState(false);
               <div className="flex justify-center items-center text-[16px] text-center font-semibold">Vessels Info</div>
               <IoInformationCircle size={"20px"} className="text-gray-400" />
             </div>
+            {shipData.map((ship, index) => (
             <div className="w-full flex flex-wrap mt-2 border-b-0.5 text-[14px]">
-              {Object.entries(shipData[0]).map(([key, value]) => (
+              {Object.entries(ship).map(([key, value]) => (
                 <div className="w-1/2 flex flex-col mb-2" key={key}>
                   <div className="w-full flex items-center text-[12px] text-gray-500">{key}</div>
                   <div className="w-full flex items-center font-semibold">{value}</div>
                 </div>
               ))}
-            </div>
+            </div>))}
           </div>
 
           {/* Drone Info */}
@@ -231,20 +258,27 @@ const [videoView, setVideoView] = useState(false);
               <div className="flex justify-center items-center text-[16px] text-center font-semibold">Drone Info</div>
               <IoInformationCircle size={"20px"} className="text-gray-400" />
             </div>
+            {droneDataStatic.map((drone) => (
             <div className="w-full flex flex-wrap mt-2 border-b-0.5 text-[14px]">
-              {Object.entries(droneData[0]).map(([key, value]) => (
-                <div className="w-1/2 flex flex-col mb-2" key={key}>
-                  <div className="w-full flex items-center text-[12px] text-gray-500">{key}</div>
-                  <div className="w-full flex items-center font-semibold">{value}</div>
-                </div>
-              ))}
-              {Object.entries(droneData[1]).map(([key, value]) => (
+              {Object.entries(drone).map(([key, value]) => (
                 <div className="w-1/2 flex flex-col mb-2" key={key}>
                   <div className="w-full flex items-center text-[12px] text-gray-500">{key}</div>
                   <div className="w-full flex items-center font-semibold">{value}</div>
                 </div>
               ))}
             </div>
+            ))}
+
+          {droneRealTimeData.map((drone) => (
+            <div className="w-full flex flex-wrap mt-2 border-b-0.5 text-[14px]">
+              {Object.entries(drone).map(([key, value]) => (
+                <div className="w-1/2 flex flex-col mb-2" key={key}>
+                  <div className="w-full flex items-center text-[12px] text-gray-500">{key}</div>
+                  <div className="w-full flex items-center font-semibold">{value}</div>
+                </div>
+              ))}
+            </div>
+            ))}
           </div>
 
           {/* Pilot Info */}
@@ -316,7 +350,8 @@ const [videoView, setVideoView] = useState(false);
       <div className="w-full flex-1 relative">
 
         {isMapView ? (<MapContainer center={[35.0767, 129.0921]} zoom={13} style={{ height: "100vh", width: "100%" }}  className="z-0 w-full h-full" zoomControl={false}
-                  trackResize={true}>
+                  trackResize={true}
+                  attributionControl={false}>
               <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               {shipsWithIcons.map((ship, index) => (
                           <Marker
@@ -337,16 +372,21 @@ const [videoView, setVideoView] = useState(false);
                   key={drone.GCS_IP}
                   position={[drone.lat, drone.lon]}
                   icon={droneIcon(drone.yaw)}
-                  eventHandlers={{ click: () => setShipDetails(true),
-                    mouseover: () => setSystemID(drone.system_id)
+                  eventHandlers={{ click: () => {setShipDetails(true);
+                    setSystemID(drone.systemid);
+                    handleSelectedDrone(drone.systemid);
+                  },
+                  mouseover: () => {setSystemID(drone.systemid) }
                   }}
                 >
                   <Popup>
                     <div>
-                      <strong>GCS:</strong> {drone.GCS_IP} <br />
-                      <strong>Altitude:</strong> {drone.alt} m <br />
-                      <strong>Speed:</strong> {drone.ground_speed} m/s <br />
-                      <strong>Battery:</strong> {drone.battery_voltage} V
+                      <strong>Drone id:</strong> VT00{drone.systemid} / {drone.systemid} <br />
+                      <strong>Altitude(m):</strong> {drone.alt} m <br />
+                      <strong>Time in air (m.s)</strong> {drone.time_in_air} m.s <br />
+                      <strong>Airspeed (m/s):</strong> {drone.airspeed} m/s <br />
+                      <strong>Groundspeed (m/s):</strong> {drone.ground_speed} m/s <br />
+                      <strong>Battery (V):</strong> {drone.battery_voltage} V
                     </div>
                   </Popup>
                 </Marker>

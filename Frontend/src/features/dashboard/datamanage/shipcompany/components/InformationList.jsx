@@ -47,7 +47,7 @@ const InformationList = ({ title, links }) => {
               <div key={index} className="py-2 px-2 pl-5 hover:bg-[#3B5BDC] rounded-md w-full mb-2">
                 <Link
                   to={link.path}
-                  className="flex justify-start items-center rounded-md text-base text-white w-full"
+                  className="flex ml-9 items-center rounded-md text-base text-white w-full"
                   onClick={() => handleSelectItem(link.label)} // Corrected onClick
                 >
                   <FaDotCircle className="mr-2 text-[6px] opacity-0.5" />{link.label}

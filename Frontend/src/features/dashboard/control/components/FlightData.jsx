@@ -2,7 +2,7 @@
 const FlightData = () => {
   return (
     <div className=" flex flex-col justify-center items-end bg-transparent w-full h-[90vh] p-7">
-        <div className="bg-white rounded-[10px] min-w-full max-h-[600px]  mt-36 p-3">
+        <div className="bg-white rounded-[10px] min-w-full max-h-[550px]  mt-36 p-3">
             <table className="table-fixed min-w-full max-h-[656px] overflow-scroll ">
                 <thead className="flex justify-between w-full bg-primary bg-opacity-[8%] sticky rounded-[10px]">
                     <tr className="flex justify-between w-full text-sm ">

@@ -7,7 +7,7 @@ const Footer = () => {
   const data=new Date();
   return (
 <div className="w-full mx-auto bottom-0">
-  <footer className="px-4 sm:px-6 lg:px-8 py-6 bg-gray-50"> 
+  <footer className="px-4 sm:px-6 lg:px-8 pb-6 bg-gray-50"> 
     <div className="mx-auto max-w-7xl flex flex-col md:flex-row justify-between items-center gap-4"> 
       {/* Logo Section */}
       <div className="md:pl-10 pl-4"> {/* Adjusted padding for mobile and desktop */}

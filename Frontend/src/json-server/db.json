@@ -422,34 +422,591 @@
       "mates": []
     }
   ],
+  "videos": [
+    {
+      "id": "1",
+      "title": "Yoon 1",
+      " time": "4:43",
+      "description": "This is the first video in the collection.",
+      "url": "https://www.youtube.com/watch?v=RlPNh_PBZb4",
+      "thumbnail": "https://example.com/thumb1.jpg",
+      "duration": "5:30",
+      "views": 1200,
+      "likes": 150,
+      "uploadDate": "2023-10-01",
+      "tags": [
+        "tutorial",
+        "education",
+        "beginner"
+      ]
+    },
+    {
+      "id": "2",
+      "title": "Yoon 2",
+      " time": "5:30",
+      "description": "This is the second video in the collection.",
+      "url": "https://www.youtube.com/watch?v=RlPNh_PBZb4",
+      "thumbnail": "https://example.com/thumb2.jpg",
+      "duration": "7:45",
+      "views": 2500,
+      "likes": 300,
+      "uploadDate": "2023-10-05",
+      "tags": [
+        "advanced",
+        "tips",
+        "tricks"
+      ]
+    }
+  ],
+  "pilots": [
+    {
+      "seaWork": [
+        {
+          "id": 1,
+          "pilot": "John Doe",
+          "boardingPeriod": "2024-01-01 to 2024-03-01",
+          "boardDays": 60,
+          "vacationDays": 30,
+          "landDays": 10
+        },
+        {
+          "id": 2,
+          "pilot": "Jane Smith",
+          "boardingPeriod": "2024-02-01 to 2024-04-01",
+          "boardDays": 58,
+          "vacationDays": 32,
+          "landDays": 15
+        }
+      ],
+      "vacation": [
+        {
+          "id": 3,
+          "pilot": "John Doe",
+          "vacationPeriod": "2024-03-02 to 2024-04-01",
+          "beLeftDay": 5
+        },
+        {
+          "id": 4,
+          "pilot": "Jane Smith",
+          "vacationPeriod": "2024-04-02 to 2024-05-01",
+          "beLeftDay": 3
+        }
+      ],
+      "landWork": [
+        {
+          "id": 5,
+          "pilot": "John Doe",
+          "landWorkPeriod": "2024-04-02 to 2024-06-01",
+          "beLeftDay": 7
+        },
+        {
+          "id": 6,
+          "pilot": "Jane Smith",
+          "landWorkPeriod": "2024-05-02 to 2024-07-01",
+          "beLeftDay": 6
+        }
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "dailyReport": [
+        {
+          "id": 1,
+          "reportNo": "250306-AA-AA",
+          "author": "John Doe",
+          "classification": "Drone Maintenance",
+          "vessel": "SAJO FAMILA",
+          "date": "03.05.24",
+          "latitude": "00-00'N",
+          "longitude": "000-00'E",
+          "boatCount": "00Boat Count / date 00",
+          "fishHoldStatus": "0t / 1,175t",
+          "pilot1": "0t / 1,175t",
+          "pilot2": "25.01.29 / date 54",
+          "checker": "Alice",
+          "droneInfo": [
+            {
+              "droneNo": "VT000",
+              "flightCount": 23,
+              "flightTime": 150,
+              "flightDistance": 300,
+              "safetyNotes": "test",
+              "remarks": "test"
+            },
+            {
+              "droneNo": "VT001",
+              "flightCount": 54,
+              "flightTime": 160,
+              "flightDistance": 250,
+              "safetyNotes": "check",
+              "remarks": "Check"
+            },
+            {
+              "droneNo": "VT005",
+              "flightCount": 57,
+              "flightTime": 140,
+              "flightDistance": 270,
+              "safetyNotes": "Maintenance",
+              "remarks": "Maintenance"
+            }
+          ],
+          "operation": [
+            {
+              "operatingDrone": "VT000",
+              "flightDistance": 115,
+              "flightRange": 20,
+              "flightTime": 98,
+              "coordinates": "00°10'N, 00°14'E",
+              "padBuoy": 12,
+              "catchQuantity": 12,
+              "contributionToCatch": 10,
+              "battery": 0,
+              "cruisingAltitude": 300,
+              "notes": "-"
+            },
+            {
+              "operatingDrone": "VT004",
+              "flightDistance": 155,
+              "flightRange": 70,
+              "flightTime": 48,
+              "coordinates": "00°10'N, 00°14'E",
+              "padBuoy": 17,
+              "catchQuantity": 14,
+              "contributionToCatch": 18,
+              "battery": 1,
+              "cruisingAltitude": 200,
+              "notes": "test"
+            }
+          ],
+          "issue":["text","text1","text2"],
+          "failuresAndDefects": "test",
+          "referenceFiles": ["/src/assets/reportData/text.txt","/src/assets/reportData/test.txt"]
+        }
+      ],
+      "incidentReport": [
+        {
+          "id": 2,
+          "reportNo": "250306-AA-BB",
+          "author": "Alice",
+          "classification": "Marine",
+          "vessel": "SAJO Alice",
+          "machineryInfo": "AN001",
+          "date": "02.12.24",
+          "detailDate":"2025-03-06/AM 03:25",
+          "type": "Testing",
+          "location": "Korea",
+          "detail": "testing",
+          "altitude": "5,000 ft",
+          "speed": "320 knots",
+          "communication": "Preparing for landing approach",
+          "battery": "41% remaining",
+          "remark": "Descent initiated at 17:10",
+          "cloudiness": "Partly cloudy, 4/8 coverage",
+          "precipitation": "Light drizzle, 0.5mm/hr",
+          "temperature": "18°C / 64.4°F",
+          "windSpeed": "12 knots, NNE direction",
+          "flightEnvironment": "Class G airspace, rural area",
+          "gpsCommStatus": "Strong GPS signal (12 satellites), radio comms clear",
+          "nearbyObstacles": "Power lines 0.5km east, 80m cell tower 2km south",
+          "occurrence": "2023-03-15T08:20:00Z",
+          "damageType": "Water damage",
+          "extent": "Severe",
+          "incidentDetail": "Unexpected rain shower during flight operation caused water ingress to electronic components",
+          "target": "Main circuit board and battery connections",
+          "causeResult": "Signal interference caused loss of control for 3.5 seconds",
+          "locationPart": "Communication module / Antenna connection",
+          "logAnalysis": "Flight logs show sudden drop in signal strength at 14:32:15, followed by erratic control inputs",
+          "additionality": "Similar incidents reported in areas with high RF interference",
+          "flightRestrictions": "Minimum altitude 150ft AGL over populated areas. No flights over wildlife reserves during nesting season (April-June). Maximum flight duration 45 minutes. No operations in visibility less than 3 miles.",
+          "actionItems": "File flight plan with regional office 24hrs in advance\n2. Conduct site survey before first flight in new area\n3. Verify all telemetry systems operational\n4. Establish communication with ground observers\n5. Confirm emergency landing zones identified",
+          "preventivePlan": "Engine inspection every 15 flight hours. Control surface calibration monthly. Fuel system check before each flight day. Navigation system accuracy verification weekly. Pilot currency maintained with minimum 3 flights per month.",
+          "attachment": "/src/assets/reportData/text.txt",
+          "reference": "testing incident"
+        }
+      ],
+      "maintenanceReport": [
+        {
+          "id": 3,
+          "reportNo": "250306-AA-CC",
+          "author": "Bob",
+          "classification": "Fish",
+          "date": "07.08.2024",
+          "vessel": "Pacific Voyager",
+          "droneInfo": "Fishing Drone",
+          "maintenanceDate": {
+            "startDate": "03.12.23",
+            "endDate": "03.11.23"
+          },
+          "leadMechanic": "Sarah Martinez",
+          "dateOfOccurrence": "03/10/2023",
+          "parts": [
+            {
+              "name": "Motor",
+              "result": "Wrong",
+              "notes": "Excessive vibration detected during startup sequence. Bearing appears worn."
+            },
+            {
+              "name": "Propeller",
+              "result": "Damage",
+              "notes": "Visible crack on blade B. Requires immediate replacement before next flight."
+            },
+            {
+              "name": "ESC",
+              "result": "None",
+              "notes": "Operating within normal parameters. No issues detected."
+            },
+            {
+              "name": "Battery",
+              "result": "None",
+              "notes": "Voltage and capacity within expected range. No swelling observed."
+            },
+            {
+              "name": "Sensor",
+              "result": "None",
+              "notes": "All sensors calibrated and functioning correctly."
+            },
+            {
+              "name": "GPS/Comm Status",
+              "result": "None",
+              "notes": "Strong signal reception. Communication links stable."
+            },
+            {
+              "name": "Beacon",
+              "result": "None",
+              "notes": "Beacon signal strong and correctly registered."
+            },
+            {
+              "name": "FlightController",
+              "result": "None",
+              "notes": "Firmware up to date. All systems responding normally."
+            },
+            {
+              "name": "GCS (Option)",
+              "result": "None",
+              "notes": "Ground control station connection stable."
+            },
+            {
+              "name": "Remark",
+              "result": "None",
+              "notes": "Recommend motor replacement at next scheduled maintenance."
+            }
+          ],
+          "model": "Autel EVO II Pro",
+          "stockQuantity": 2,
+          "serialNo": "AEII2103567, AEII2103568",
+          "remarks": "Extended battery package. Scheduled for firmware update on April 10.",
+          "operationTest": "Necessary",
+          "flightTest": "Necessary",
+          "detailInfo": "Complete testing suite required following ESC replacement and GPS antenna repositioning. Verify all systems functioning correctly before returning to service.",
+          "necessaryTasks": "Necessary",
+          "planDetailInfo": "This structure captures the basic inventory information shown in the form, along with additional metadata that would be useful for inventory management.",
+          "remarkDetailInfo": "The expanded version includes multiple items with various details like categories, locations, values, and status to provide a",
+          "attachment": "testing1.pdf"
+        }
+      ],
+      "itemRequestReport": [
+        {
+          "id": 4,
+          "reportNo": "250306-AA-DD",
+          "author": "Lucie",
+          "date": "09.10.24",
+          "vessel": "Pacific Voyager",
+          "quantity": "23",
+          "hs_code": "12345678",
+          "classification": "Ship Management",
+          "item_name": "Laptop",
+          "item_detail": "Dell XPS 15, 16GB RAM, 512GB SSD",
+          "required_quantity": "10",
+          "requested_quantity": "8",
+          "supplier_link": "https://example.com/supplier",
+          "mandatory_requirements": "Warranty of at least 1 year",
+          "reason": "Replacement for outdated laptops",
+          "amount": "1200",
+          "total_amount": "9600"
+        }
+      ],
+      "handoverReport": [
+        {
+          "id": 5,
+          "reportNo": "250306-AA-EE",
+          "author": "Cathy",
+          "vessel": "John Alice",
+          "date": "06.06.24",
+          "handover_date": {
+            "start": "2025-04-01",
+            "end": "2025-04-10"
+          },
+          "team_name": "Development Team",
+          "transferor": "Internal Pilot",
+          "transferee": "External Pilot",
+          "manager": "John Doe",
+          "remarks": "Handover completed successfully",
+          "work_details": [
+            {
+              "no": 1,
+              "work_detail": "Fix UI bugs in the dashboard",
+              "remarks": "Completed"
+            },
+            {
+              "no": 2,
+              "work_detail": "Optimize database queries",
+              "remarks": "In progress"
+            },
+            {
+              "no": 3,
+              "work_detail": "Update API documentation",
+              "remarks": "Pending review"
+            }
+          ],
+          "reference": "Project XYZ - Sprint 5",
+          "classification": "Electronics",
+          "itemName": "Drone No1112",
+          "status": "None",
+          "location": "Daegu",
+          "itemReference": "testing Drone",
+          "requiredAction": "testing is required",
+          "unresolvedTasks": "need to testing drone",
+          "progressStatus": "Ongoing",
+          "plannedTasks": "drone will be check",
+          "taskRemarks": "testing and maintaining is still required.",
+          "message": "drone system will still remain."
+        }
+      ],
+      "takeoverReport": [
+        {
+          "id": 6,
+          "reportNo": "250306-AA-FF",
+          "author": "Mary",
+          "vessel": "John Doe",
+          "date": "02.03.24",
+          "takeover_date": {
+            "start": "2025-04-01",
+            "end": "2025-04-10"
+          },
+          "teamName": "option1",
+          "transferor": {
+            "internalPilot": "John",
+            "externalPilot": "Alice"
+          },
+          "transferee": {
+            "internalPilot": "Mike",
+            "externalPilot": "Cathy"
+          },
+          "manager": "Zayn Malik",
+          "remarks": "I will be sent to you this report.",
+          "work_details": [
+            {
+              "no": 1,
+              "work_detail": "Fix UI bugs in the dashboard",
+              "remarks": "Completed"
+            },
+            {
+              "no": 2,
+              "work_detail": "Optimize database queries",
+              "remarks": "In progress"
+            },
+            {
+              "no": 3,
+              "work_detail": "Update API documentation",
+              "remarks": "Pending review"
+            }
+          ],
+          "takeoverReference": "Project XYZ - Sprint 5",
+          "takeoverSign": {
+            "status": "Sign Refusal",
+            "remarks": "User refused due to missing information."
+          },
+          "classification": "System Maintenance",
+          "itemName": "Takeover by John",
+          "status": "Unused",
+          "location": "Busan",
+          "itemReference": "Project ABC - Sprint 6",
+          "requiredActions": "need to check overall project",
+          "itemTakeoverSign": {
+            "status": "Sign",
+            "remarks": "User Information Complete."
+          },
+          "unresolvedTasks": "need to testing marine",
+          "progressStatus": "Unconfirmed",
+          "plannedTasks": "drone will be check",
+          "takeoverRemarks": "Extended battery package. Scheduled for firmware update on April 10.",
+          "taskTakeoverSign": {
+            "status": "Sign Refusal",
+            "remarks": "User refused due to missing information."
+          },
+          "message": "drone system will be able to check."
+        }
+      ]
+    }
+  ],
   
-    "videos": [
-      {
-        "id": 1,
-        "title": "Yoon 1",
-       " time": "4:43",
-        "description": "This is the first video in the collection.",
-        "url": "https://www.youtube.com/watch?v=RlPNh_PBZb4",
-        "thumbnail": "https://example.com/thumb1.jpg",
-        "duration": "5:30",
-        "views": 1200,
-        "likes": 150,
-        "uploadDate": "2023-10-01",
-        "tags": ["tutorial", "education", "beginner"]
-      },
-      {
-        "id": 2,
-        "title": "Yoon 2",
-        " time": "5:30",
-        "description": "This is the second video in the collection.",
-        "url": "https://www.youtube.com/watch?v=RlPNh_PBZb4",
-        "thumbnail": "https://example.com/thumb2.jpg",
-        "duration": "7:45",
-        "views": 2500,
-        "likes": 300,
-        "uploadDate": "2023-10-05",
-        "tags": ["advanced", "tips", "tricks"]
-      }
-    ]
-  }
+  "materials": [
+    {
+      "id": "1",
+      "date": "25.03.01~26.01.01",
+      "company": "Sajo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-001,MDT001",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "2",
+      "date": "25.03.01~26.01.01",
+      "company": "Majo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "3",
+      "date": "25.03.01~26.01.01",
+      "company": "FAJO",
+      "vessel": "FAMILIA",
+      "drone": "MDT0011-0011,MDT00231",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "4",
+      "date": "25.03.01~26.01.01",
+      "company": "Majo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "5",
+      "date": "25.03.01~26.01.01",
+      "company": "Lajo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "6",
+      "date": "25.03.01~26.01.01",
+      "company": "Pajo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    }
+  ],
+  "records": [
+    {
+      "id": "1",
+      "date": "2025-03-11",
+      "title": "Pacific Ocean",
+      "total_count": "1",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-001,MDT001",
+      "pilot": "James Smith,Robert Johnson"
+    },
+    {
+      "id": "2",
+      "date": "2025-04-17",
+      "title": "Atlantic Ocean",
+      "total_count": "5",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-001,MDT001",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "3",
+      "date": "2025-02-12",
+      "title": "Indian Ocean",
+      "total_count": "8",
+      "vessel": "Aiocn-Flight",
+      "drone":  "MDT001-001,MDT001",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "4",
+      "date": "2025-04-13",
+      "title": "Indian and Pacific Ocean",
+      "total_count": "4",
+      "vessel": "Aiocn-Flight",
+      "drone":  "MDT001-001,MDT001",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "5",
+      "date": "2025-01-23",
+      "title": "South Pacific Ocean",
+      "total_count": "3",
+      "vessel": "AI-Motion",
+      "drone":  "MDT004-004,MDT021",
+      "pilot": "James Smith,Robert Johnson"
+    },
+    {
+      "id": "6",
+      "date": "2025-06-15",
+      "title": "Southern Ocean",
+      "total_count": "9",
+      "vessel": "Oceanic-Explorer",
+      "drone": "MDT003-004,MDT003",
+      "pilot": "Kevin Thomas,Brian Jackson"
+    },
+    {
+      "id": "7",
+      "date": "2025-04-23",
+      "title": "Myanmar Sea",
+      "total_count": "12",
+      "vessel": "AI-Motion",
+      "drone":  "MDT004-004,MDT021",
+      "pilot": "Jame Johnson,Seungri Kim"
+    }
+  ],
+  "schedules": [
+    {
+      "id": "1",
+      "date": "25.03.01~26.01.01",
+      "company": "Sajo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-001,MDT001",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "2",
+      "date": "25.03.01~26.01.01",
+      "company": "Majo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "3",
+      "date": "25.03.01~26.01.01",
+      "company": "FAJO",
+      "vessel": "FAMILIA",
+      "drone": "MDT0011-0011,MDT00231",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "4",
+      "date": "25.03.01~26.01.01",
+      "company": "Majo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "5",
+      "date": "25.03.01~26.01.01",
+      "company": "Lajo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    },
+    {
+      "id": "6",
+      "date": "25.03.01~26.01.01",
+      "company": "Pajo",
+      "vessel": "FAMILIA",
+      "drone": "MDT001-0013,MDT0021",
+      "pilot": "SEUNGRI KIM,SEUNGRI KIM"
+    }
+  ]
+}
+  
+   
 

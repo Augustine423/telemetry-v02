@@ -18,6 +18,11 @@ const VideoViewer = ({setVideoView, systemID}) => {
     const [video1State, setVideo1State] = useState({ scale: 1, x: 0, y: 0 });
     const [video2State, setVideo2State] = useState({ scale: 1, x: 0, y: 0 });
 
+    const remoteVideoRef = useRef(null);
+    const server = "ws://13.213.46.108:8188"; // Janus WebSocket Server
+    const streamId = 1;
+    const secret = "adminpwd";
+
     const videoRefs = [useRef(null), useRef(null)];
     const isDragging = useRef(false);
     const lastPosition = useRef({ x: 0, y: 0 });
@@ -25,45 +30,173 @@ const VideoViewer = ({setVideoView, systemID}) => {
     const [drones, setDrones] = useState({});
     const [lat, setLat] = useState("");
     const [lon, setLon] = useState("");
-    const [shipPosition, setShipPosition] = useState([]);
+    const [shipPosition, setShipPosition] = useState({});
     const reconnectInterval = useRef(null);
     const [wayPointsVisible, setWayPointsVisible] = useState(false);
     // const t = useTranslations();
+
+    console.log(systemID);
+    console.log(drones)
+    console.log(shipPosition)
 
     const droneData = [
         {
           "Drone_ID": "MDT250101VT001",
           "Vessel ID": "??",
-          "lat": lat,
-          "Ion": lon, 
-          "alt": 426.15,
-          "dist_traveled": 56.12,
-          "wp_dist": 297.00,
-          "dist_to_home": 1402.29,
-          "vertical_speed": 0.47,
-          "wind_vel": 5.12,
-          "airspeed": 27.78,
-          "groundspeed": 32.90,
-          "roll": 17.43,
-          "pitch": -3.75,
-          "yaw": 150.00,
-          "toh": 42.55,
-          "tot": 9.02,
-          "time_in_air": 3.52,
-          "time_in_air_min_sec": 3.52,
-          "gps_hdop": 30.00,
-          "battery_voltage": 56.12,
-          "battery_current": 8.00,
-          "ch3percent": 50,
-          "ch3out": 1500.000,
-          "ch9out": 1000.000,
-          "ch10out": 1000.000,
-          "ch11out": 1000.000,
-          "ch12out": 1000.000,
-          "waypoints": 3
+          "lat": drones.lat,
+          "Ion": drones.lon, 
+          "alt": drones.alt,
+          "dist_traveled(m)": drones.dist_traveled,
+          "wp_dist(m)": drones.wp_dist,
+          "dist_to_home(m)": drones.dist_to_home,
+          "null": null,
+          "wind_vel(m/s)": drones.wind_vel,
+          "airspeed(m/s)": drones.airspeed,
+          "groundspeed(m/s)": drones.ground_speed,
+          "roll": drones.roll,
+          "pitch": drones.pitch,
+          "yaw": drones.yaw,
+          "toh": drones.toh,
+          "tot": drones.tot,
+          "time_in_air(s)": drones.time_in_air,
+          "time_in_air_min_sec(m/s)": drones.time_in_air,
+          "gps_hdop": drones.gps_hdop,
+          "battery_voltage(V)": drones.battery_voltage,
+          "battery_current(A)": drones.battery_current,
+          "ch3percent": drones.ch3percent,
+          "ch3out": drones.ch3out,
+          "ch9out": drones.ch9out,
+          "ch10out": drones.ch10out,
+          "ch11out": drones.ch11out,
+          "ch12out": drones.ch12out,
+          "blank": null,
         }
       ];
       
+      //Live_Stream_Drone_Camera
+      useEffect(() => {
+        let janus = null;
+        let streaming = null;
+        let remoteStream = null;
+    
+        // Load adapter.js first
+        const adapterScript = document.createElement("script");
+        adapterScript.src = "https://webrtc.github.io/adapter/adapter-latest.js";
+        adapterScript.onload = () => loadJanus();
+        document.body.appendChild(adapterScript);
+    
+        function loadJanus() {
+          const janusScript = document.createElement("script");
+          janusScript.src = "/janus.js"; // Load from public folder
+          janusScript.onload = () => initializeJanus();
+          document.body.appendChild(janusScript);
+        }
+    
+        function initializeJanus() {
+          if (!window.Janus) {
+            console.error("Janus library not loaded");
+            setStatus("Error: Janus.js not loaded");
+            return;
+          }
+    
+          window.Janus.init({
+            debug: "all",
+            callback: function () {
+              if (!window.Janus.isWebrtcSupported()) {
+                setStatus("WebRTC not supported!");
+                return;
+              }
+    
+              janus = new window.Janus({
+                server: server,
+                success: function () {
+                  janus.attach({
+                    plugin: "janus.plugin.streaming",
+                    opaqueId: "streaming-" + window.Janus.randomString(12),
+                    success: function (pluginHandle) {
+                      streaming = pluginHandle;
+                      setStatus("Plugin attached, starting stream...");
+                      startStream();
+                    },
+                    error: function (error) {
+                      console.error("Plugin attach error:", error);
+                      setStatus("Error: " + error);
+                    },
+                    onmessage: function (msg, jsep) {
+                      handleMessage(msg, jsep);
+                    },
+                    onremotetrack: function (track, mid, on) {
+                      if (!remoteStream) {
+                        remoteStream = new MediaStream();
+                        remoteVideoRef.current.srcObject = remoteStream;
+                      }
+                      if (on) {
+                        remoteStream.addTrack(track);
+                        setStatus("Receiving video...");
+                      } else {
+                        remoteStream.removeTrack(track);
+                        setStatus("Track removed");
+                      }
+                    },
+                    oncleanup: function () {
+                      setStatus("Stream stopped");
+                      remoteStream = null;
+                    },
+                  });
+                },
+                error: function (error) {
+                  console.error("Janus error:", error);
+                  setStatus("Error: " + error);
+                },
+              });
+            },
+          });
+        }
+    
+        function startStream() {
+          let body = {
+            request: "watch",
+            id: streamId,
+            secret: secret,
+            offer_audio: true,
+            offer_video: true,
+          };
+          streaming.send({ message: body });
+        }
+    
+        function handleMessage(msg, jsep) {
+          if (msg["error"]) {
+            console.error("Streaming error:", msg["error"]);
+            setStatus("Error: " + msg["error"]);
+            return;
+          }
+    
+          if (jsep) {
+            streaming.createAnswer({
+              jsep: jsep,
+              tracks: [
+                { type: "audio", recv: true },
+                { type: "video", recv: true },
+              ],
+              success: function (jsep) {
+                let body = { request: "start" };
+                streaming.send({ message: body, jsep: jsep });
+              },
+              error: function (error) {
+                console.error("Error creating answer:", error);
+                setStatus("Error creating answer");
+              },
+            });
+          }
+        }
+    
+        return () => {
+          if (janus) janus.destroy();
+          document.body.removeChild(adapterScript);
+        };
+      }, []);
+    
+
       const ws = useRef(null);
 
       useEffect(() => {
@@ -84,24 +217,32 @@ const VideoViewer = ({setVideoView, systemID}) => {
             try {
               const data = JSON.parse(event.data);
               if (data.drones && Array.isArray(data.drones)) {
-                const updatedDrones = {};
-                let updatedLat = null;
-                let updatedLon = null;
+
+                const selectedDrone = data.drones.find((drone) => drone.systemid === systemID) || null;
+
+                setDrones(selectedDrone);
+                setShipPosition(selectedDrone.home_location); 
+                // let updatedLat = null;
+                // let updatedLon = null;
+                // updatedLat = `${Math.abs(selectedDrone.lat)}° ${selectedDrone.lat >= 0 ? "N" : "S"}`;
+                //   updatedLon = `${Math.abs(selectedDrone.lon)}° ${selectedDrone.lat >= 0 ? "E" : "W"}`;;
+                //   setShipPosition([...shipPosition, selectedDrone.home_location]);
+                
+                // setLat(updatedLat);
+                // setLon(updatedLon);
+
+                // let updatedDrones = {};
+                // let updatedLat = null;
+                // let updatedLon = null;
                 // const updatedShipPosition = [];
-                data.drones.forEach((drone) => {
-                  drone.waypoints = Array.isArray(drone.waypoints) ? drone.waypoints : [];
-                  updatedDrones[drone.GCS_IP] = drone;
-                  updatedLat = `${Math.abs(drone.lat)}° ${drone.lat >= 0 ? "N" : "S"}`;
-                  updatedLon = `${Math.abs(drone.lon)}° ${drone.lat >= 0 ? "E" : "W"}`;;
-                  setShipPosition([...shipPosition, drone.home_location]);
-                });
-                setDrones(updatedDrones);
-                setLat(updatedLat);
-                setLon(updatedLon);
+                // data.drones.forEach((drone) => {
+                //   drone.waypoints = Array.isArray(drone.waypoints) ? drone.waypoints : [];
+                //   updatedDrones[drone.GCS_IP] = drone;
+                //   updatedDrones = Object.values(drones).filter((drone) => drone.systemid === systemID)
                 
     
                 // setShipPosition(updatedShipPosition);
-                console.log(updatedDrones);
+                // console.log(updatedDrones);
                 // console.log(updatedShipPosition);
               } else {
                 console.warn("Invalid WebSocket data:", data);
@@ -166,11 +307,13 @@ const VideoViewer = ({setVideoView, systemID}) => {
         };
         
         const shipsWithIcons = useMemo(() => {
-          return shipPosition.map((ship, index) => ({
+          return Object.entries(shipPosition).map((ship, index) => ({
             ...ship,
             icon: getShipIcon(index),
           }));
         }, [shipPosition]);
+
+        console.log(shipsWithIcons)
       
 
     // Handle zoom for each video
@@ -239,7 +382,7 @@ const VideoViewer = ({setVideoView, systemID}) => {
     };
 
     return (
-        <div className="w-full h-full absolute z-50 flex flex-col top-0 left-0 font-pretendard bg-white text-white">
+        <div className="w-full h-full absolute z-50 flex flex-col top-0 left-0 font-pretendard bg-white text-white p-0">
             {/* Header */}
             <div className="w-full flex justify-between items-center pt-2 pb-2 pl-4 pr-4 bg-primary bg-opacity-70">
                 <div className="w-1 h-1 rounded-full bg-[#4ECC00]"></div>
@@ -251,7 +394,7 @@ const VideoViewer = ({setVideoView, systemID}) => {
             <div className="w-full flex items-center h-1/2 bg-primary">
                 {/* Video 1 */}
                 <div
-                    className="w-1/2 overflow-hidden flex justify-center items-center"
+                    className="w-1/2 h-full overflow-hidden flex justify-center items-center"
                     onWheel={(e) => handleWheelZoom(e, 0)}
                     onMouseDown={(e) => handleMouseDown(e, 0)}
                     onMouseMove={handleMouseMove}
@@ -259,40 +402,66 @@ const VideoViewer = ({setVideoView, systemID}) => {
                     onMouseLeave={handleMouseUp}
                     onDoubleClick={() => resetZoom(0)}
                 >
-                    <video
-                        ref={videoRefs[0]}
-                        src="TestVideo2.mp4"
+                    {remoteVideoRef.current !== null ? (<video
+                        ref={remoteVideoRef}
+                        playsInline
                         autoPlay
+                        muted
                         loop
-                        className="cursor-grab w-full h-full"
+                        className="cursor-grab w-full h-full object-fill"
                         style={{
                             transform: `scale(${video1State.scale}) translate(${video1State.x}px, ${video1State.y}px)`,
                             transition: "transform 0.1s ease-out",
                         }}
-                    ></video>
+                    ></video>) : 
+                    (<video
+                    ref={videoRefs[0]}
+                    src="TestVideo2.mp4"
+                    autoPlay
+                    loop
+                    className="cursor-grab w-full h-full object-fill"
+                    style={{
+                        transform: `scale(${video1State.scale}) translate(${video1State.x}px, ${video1State.y}px)`,
+                        transition: "transform 0.1s ease-out",
+                    }}
+                ></video>)
+                    }
                 </div>
 
                 {/* Video 2 */}
                 <div
-                    className="w-1/2 overflow-hidden flex justify-center items-center"
-                    onWheel={(e) => handleWheelZoom(e, 1)}
-                    onMouseDown={(e) => handleMouseDown(e, 1)}
+                    className="w-1/2 h-full overflow-hidden flex justify-center items-center"
+                    onWheel={(e) => handleWheelZoom(e, 0)}
+                    onMouseDown={(e) => handleMouseDown(e, 0)}
                     onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp}
                     onMouseLeave={handleMouseUp}
-                    onDoubleClick={() => resetZoom(1)}
+                    onDoubleClick={() => resetZoom(0)}
                 >
-                    <video
-                        ref={videoRefs[1]}
-                        src="TestVideo2.mp4"
+                    {remoteVideoRef.current !== null ? (<video
+                        ref={remoteVideoRef}
+                        playsInline
                         autoPlay
+                        muted
                         loop
-                        className="cursor-grab w-full h-full"
+                        className="cursor-grab w-full h-full object-fill"
                         style={{
-                            transform: `scale(${video2State.scale}) translate(${video2State.x}px, ${video2State.y}px)`,
+                            transform: `scale(${video1State.scale}) translate(${video1State.x}px, ${video1State.y}px)`,
                             transition: "transform 0.1s ease-out",
                         }}
-                    ></video>
+                    ></video>) : 
+                    (<video
+                    ref={videoRefs[0]}
+                    src="TestVideo2.mp4"
+                    autoPlay
+                    loop
+                    className="cursor-grab w-full h-full object-fill"
+                    style={{
+                        transform: `scale(${video1State.scale}) translate(${video1State.x}px, ${video1State.y}px)`,
+                        transition: "transform 0.1s ease-out",
+                    }}
+                ></video>)
+                    }
                 </div>
             </div>
 
@@ -305,9 +474,9 @@ const VideoViewer = ({setVideoView, systemID}) => {
                     <div className="w-full flex flex-wrap mr-2 justify-start items-center text-sm">
                     {droneData?.length > 0 ? (
                         Object.entries(droneData[0]).map(([key, value]) => (
-                            <div key={key} className="w-1/3 flex items-center p-2 justify-between border-b-0.5">
+                            <div key={key} className="w-1/3 flex items-center p-[6px] justify-between border-b-0.5">
                                 <div className="font-semibold">{key}:</div>
-                                <div>{value}</div>
+                                <div className="overflow-scroll">{value}</div>
                             </div>
                         ))
                         ) : (
@@ -319,14 +488,15 @@ const VideoViewer = ({setVideoView, systemID}) => {
                 </div>
                 
                 {/* Map */}
-        <MapContainer
-            center={[35.062067, 129.1024905]}
-            zoom={10}
+      {drones && Object.keys(drones).length > 0 && (<MapContainer
+            center={[drones.lat, drones.lon]}
+            zoom={14}
             className="z-0 w-1/2 h-full"
             zoomControl={false}
+            attributionControl={false}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              {shipsWithIcons.map((ship, index) => (
+              {/* {shipsWithIcons && Object.keys(shipsWithIcons).map((ship, index) => (
                 <Marker
                   key={index}
                   position={[ship.lat, ship.lon]}
@@ -337,36 +507,37 @@ const VideoViewer = ({setVideoView, systemID}) => {
                     popupAnchor: [0, -40],
                   })}
                 />
-                                      ))}
-              {drones && Object.values(drones).filter((drone) => drone.system_id === systemID).map((drone) => (
+              ))} */}
+              {drones && Object.keys(drones).length > 0 && (
                 <>
                 <Marker
-                  key={drone.GCS_IP}
-                  position={[drone.lat, drone.lon]}
-                  icon={droneIcon(drone.yaw)}
+                  key={drones.systemid}
+                  position={[drones.lat, drones.lon]}
+                  icon={droneIcon(drones.yaw)}
                 >
                   <Popup>
                     <div>
-                      <strong>GCS:</strong> {drone.GCS_IP} <br />
-                      <strong>Altitude:</strong> {drone.alt} m <br />
-                      <strong>Speed:</strong> {drone.ground_speed} m/s <br />
-                      <strong>Battery:</strong> {drone.battery_voltage} V
+                    <strong>Drone id:</strong> VT00{drones.systemid} / {drones.systemid} <br />
+                      <strong>Altitude(m):</strong> {drones.alt} m <br />
+                      <strong>Time in air (m.s)</strong> {drones.time_in_air} m.s <br />
+                      <strong>Airspeed (m/s):</strong> {drones.airspeed} m/s <br />
+                      <strong>Groundspeed (m/s):</strong> {drones.ground_speed} m/s <br />
+                      <strong>Battery (V):</strong> {drones.battery_voltage} V
                     </div>
                   </Popup>
                 </Marker>
                 <Polyline
-                key={drone.GCS_IP}
-                positions={drone.waypoints.map((waypoint) => [waypoint.lat, waypoint.lon])}
-                color="red"
-                opacity={0.5}
-                weight={2}
-                // dashArray="5, 10"
-              />
+                  key={drones.GCS_IP}
+                  positions={Array.isArray(drones.waypoints) ? drones.waypoints.map((waypoint) => [waypoint.lat, waypoint.lon]) : []}
+                  color="red"
+                  opacity={0.5}
+                  weight={2}
+                />
               </>
-              ))}
+              )}
         {wayPointsVisible &&<Polyline positions={drones.waypoints} color="#111111" opacity={0.5} weight={2} dashArray="5, 10"/>}
         
-      </MapContainer>
+      </MapContainer>)}
 
             </div>
 

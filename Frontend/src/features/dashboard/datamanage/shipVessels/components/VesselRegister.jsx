@@ -11,7 +11,7 @@ import { useState } from "react";
 const VesselRegister = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [submitError, setSubmitError] = useState(null);
+
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -23,38 +23,85 @@ const VesselRegister = () => {
     formState: { errors },
   } = useForm();
 
-  const onSubmit = async (data) => {
-    try {
-      setSubmitError(null); // Clear previous errors
-      console.log(data);
-      const payload = {
-        ...data,
-        buildYear: data.buildYear
-          ? new Date(data.buildYear).toISOString().split("T")[0]
-          : null,
-        shipLogo: selectedImage,
-      };
+  // const onSubmit = async (data) => {
+  //   try {
+  //     const formData = new FormData();
+  //        // Append all form fields
+  //        Object.keys(data).forEach((key) => {
+  //         formData.append(key, data[key]);
+  //       });
+  //     setSubmitError(null); // Clear previous errors
+  //     console.log(data);
+  //     const payload = {
+  //       ...data,
+  //       buildYear: data.buildYear
+  //         ? new Date(data.buildYear).toISOString().split("T")[0]
+  //         : null,
+  //       shipLogo: selectedImage,
+  //     };
+  //     if (selectedImage) {
+  //       formData.append("shipLogo", selectedImage);
+  //     }
 
-      await dispatch(addVessel(payload)).unwrap();
-      dispatch(fetchVessels());
-      navigate("/dashboard/vessel-overview");
-      reset();
-      setSelectedImage(null);
-      setPreview(null);
-    } catch (error) {
-      setSubmitError(error.message || "Failed to save vessel"); // Set error message
-      console.error("Error while saving vessel:", error);
-    }
-  };
+
+  //     await dispatch(addVessel(payload)).unwrap();
+  //     dispatch(fetchVessels());
+  //     navigate("/dashboard/vessel-overview");
+  //     reset();
+  //     setSelectedImage(null);
+  //     setPreview(null);
+  //   } catch (error) {
+  //     setSubmitError(error.message || "Failed to save vessel"); // Set error message
+  //     console.error("Error while saving vessel:", error);
+  //   }
+  // };
+
+  
+   const onSubmit = async (data) => {
+    console.log(data);
+      try {
+        const formData = new FormData();
+  
+        // Convert date format
+        if (data.buildYear) {
+          data.buildYear = new Date(data.buildYear)
+            .toISOString()
+            .split("T")[0];
+        }
+  
+        // Append all form fields
+        Object.keys(data).forEach((key) => {
+          formData.append(key, data[key]);
+        });
+  
+        // Append the selected file if available
+        if (selectedImage) {
+          formData.append("shipLogo", selectedImage);
+        }
+  
+        console.log("Submitting FormData:", formData);
+  
+        await dispatch(addVessel(formData)).unwrap();
+        dispatch(fetchVessels());
+        navigate("/dashboard/vessel-overview");
+        reset();
+        setSelectedImage(null);
+        setPreview(null);
+      } catch (error) {
+        console.error("Error while saving Vessel:", error);
+      }
+    };
+
+   
 
   return (
     <>
       <div className="bg-white rounded-lg shadow-md px-6 mx-6 md:p-8 h-full xl:mb-10 ">
-        <form onSubmit={handleSubmit(onSubmit)} className="h-full pt-10">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="h-full pt-10  flex flex-col">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
             {/* Logo Upload */}
 
-            <div className="col-span-1 h-36 mt-10 md:mt-20">
+            <div className="col-span-1 flex flex-col items-center justify-center h-full" >
               <div className="w-64 relative">
                 <div className="bg-gray-300 rounded-md h-36 flex flex-col items-center justify-center">
                   {preview ? (
@@ -144,7 +191,13 @@ const VesselRegister = () => {
                     <input
                       type="number"
                       {...register("coId", {
-                        required: "Country  is required",
+                        valueAsNumber: true,
+                        required: "CompanyId is required",
+                        min: {
+                          value: 0,
+                          message:
+                            "CompanyId must be greater than or equal to 0",
+                        },
                       })}
                       placeholder="Please Enter"
                       className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -491,25 +544,22 @@ const VesselRegister = () => {
                   <div className="flex-1">
                     <input
                       type="number"
-                      {...register(
-                        "yield"
-                        //     {
-                        //     required: "Vessel Phone is required",
-                        //     pattern: {
-                        //       value: /^\+\d{1,3}-\d{3}-\d{3}-\d{4}$/, // Regex for +<countryCode>-XXX-XXX-XXXX
-                        //       message:
-                        //         "Phone number must follow the format: +<countryCode>-XXX-XXXX-XXXX",
-                        //     },
-                        //   }
-                      )}
+                      {...register("yield", {
+                        valueAsNumber: true,
+                        required: "YEID is required",
+                        min: {
+                          value: 0,
+                          message: "YEID must be greater than or equal to 0",
+                        },
+                      })}
                       placeholder="Please Enter"
                       className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
-                    {/* {errors.shipPhone && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {errors.shipPhone.message}
-                      </p>
-                    )} */}
+                    {/* {errors.yield && (
+      <p className="text-red-500 text-sm mt-1">
+        {errors.yield.message}
+      </p>
+    )} */}
                   </div>
                 </div>
                 {/* Establishment Year */}
