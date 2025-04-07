@@ -333,10 +333,10 @@ public class MavlinkClient {
         // Print Header Row
         System.out.printf("%-25s", "Telemetry Data");
         for (int port : activePorts) {
-            System.out.printf("| %-15s ", "Port " + port);
+          //  System.out.printf("| %-15s ", "Port " + port);
         }
-        System.out.println();
-        System.out.println("--------------------------------------------------------------------------------------");
+       // System.out.println();
+       // System.out.println("--------------------------------------------------------------------------------------");
 
         // Print Each Row (Hide inactive ports)
         for (String key : telemetryKeys) {
@@ -349,15 +349,15 @@ public class MavlinkClient {
                 }
             }
             if (hasNonNullValue) {
-                System.out.printf("%-25s", key);
+              //  System.out.printf("%-25s", key);
                 for (int port : activePorts) {
                     Object value = telemetryUdpDataMap.get(port).getOrDefault(key, "N/A");
-                    System.out.printf("| %-15s ", value);
+                   // System.out.printf("| %-15s ", value);
                 }
-                System.out.println();
+              // System.out.println();
             }
         }
-        System.out.println("======================================================================================");
+       // System.out.println("======================================================================================");
     }
 
     private double calculateDistance(double lat1, double lon1, double lat2, double lon2) {
@@ -431,7 +431,7 @@ public class MavlinkClient {
 
                         telemetryList.add(telemetryData);
                     }
-                    printTelemetryData();
+                   // printTelemetryData();
                 }
 
                 if (!telemetryList.isEmpty()) {
