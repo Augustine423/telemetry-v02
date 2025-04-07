@@ -1,0 +1,153 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  DOCKER_COMPOSE_VERSION: "2.24.7"
+  APP_DIR: "/home/ubuntu/app"
+  SERVICE_NAME: "app"
+  AWS_REGION: ${{ secrets.AWS_REGION }}  # Optional: Add this secret if needed
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose --version
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build Docker images
+        run: |
+          docker-compose build --parallel
+
+      - name: Run tests
+        run: |
+          docker-compose up -d
+          # Add your test commands here, e.g.:
+          # docker-compose exec ${SERVICE_NAME} npm test
+          docker-compose down
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Debug Secrets
+        run: |
+          echo "EC2_HOST length: ${#EC2_HOST}"
+          echo "EC2_USERNAME length: ${#EC2_USERNAME}"
+          echo "EC2_SSH_KEY length: ${#EC2_SSH_KEY}"
+          echo "AWS_REGION: ${AWS_REGION:-'Not set'}"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 30s
+          debug: true
+          script: |
+            set -e
+
+            echo "🔄 Updating system and installing dependencies..."
+            sudo apt update -y && sudo apt upgrade -y
+
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "🐳 Installing Docker..."
+              curl -fsSL https://get.docker.com | sudo sh
+              sudo usermod -aG docker ${USER}
+              sudo systemctl enable docker --now
+            fi
+
+            if ! command -v docker-compose >/dev/null 2>&1; then
+              echo "🐙 Installing Docker Compose..."
+              sudo curl -L "https://github.com/docker/compose/releases/download/v${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+              sudo chmod +x /usr/local/bin/docker-compose
+            fi
+
+            echo "📁 Preparing application directory..."
+            mkdir -p ${{ env.APP_DIR }}
+            cd ${{ env.APP_DIR }}
+
+            echo "🔄 Syncing repository..."
+            if [ -d ".git" ]; then
+              git fetch --all
+              git checkout main
+              git reset --hard origin/main
+              git clean -fd
+            else
+              git clone https://github.com/${{ github.repository }} .
+            fi
+
+            echo "🧹 Cleaning up Docker resources..."
+            docker image prune -f
+            docker system prune -f --volumes
+
+            echo "🏗️ Deploying application..."
+            docker-compose down --remove-orphans --volumes
+            docker-compose build --no-cache
+            docker-compose up -d --force-recreate --remove-orphans
+
+            echo "📅 Setting up cron job..."
+            CRON_FILE="/tmp/crontab.tmp"
+            CRON_JOB="*/5 * * * * ${{ env.APP_DIR }}/upload-logs-to-s3.sh"
+            (crontab -l 2>/dev/null | grep -v 'upload-logs-to-s3.sh' || true; echo "$CRON_JOB") > "$CRON_FILE"
+            crontab "$CRON_FILE"
+            rm -f "$CRON_FILE"
+
+            echo "✅ Deployment completed!"
+
+      - name: Verify Deployment
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 30s
+          debug: true
+          script: |
+            set -e
+            cd ${{ env.APP_DIR }}
+            sleep 5
+            if ! docker-compose ps | grep "Up" >/dev/null 2>&1; then
+              echo "❌ Deployment failed: Containers not running!"
+              docker-compose logs
+              exit 1
+            fi
+            echo "✓ Deployment verified successfully!"
