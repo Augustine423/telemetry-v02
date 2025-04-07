@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1                    # Your AWS region (for S3)
-  DOCKER_REGISTRY: docker.io               # Use Docker Hub; switch to ECR if preferred
+  DOCKER_REGISTRY: docker.io               # Docker Hub registry
   IMAGE_PREFIX: ${{ secrets.DOCKER_USERNAME }}/teledata
   FRONTEND_IMAGE: frontend
   BACKEND_IMAGE: backend
@@ -41,19 +41,19 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: ./Frontend
-        run: npm ci || true  # Ignore npm ci failures
+        run: npm ci || true
 
       - name: Lint Frontend (Optional)
         working-directory: ./Frontend
-        run: npm run lint || true  # Continue even if linting fails
+        run: npm run lint || true
 
       - name: Build Frontend
         working-directory: ./Frontend
-        run: npm run build || true  # Continue even if build fails
+        run: npm run build || true
 
       - name: Build and Test Backend
         working-directory: ./Backend
-        run: mvn clean package || true  # Continue even if backend build fails
+        run: mvn clean package || true
 
       - name: Generate Version Tag
         id: version
@@ -69,16 +69,18 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and Push Frontend Image
+      - name: Build, Tag, and Push Frontend Image
         working-directory: ./Frontend
         run: |
-          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} . || true
+          docker build -t frontend:${{ steps.version.outputs.tag }} . || true
+          docker tag frontend:${{ steps.version.outputs.tag }} ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
           docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
 
-      - name: Build and Push Backend Image
+      - name: Build, Tag, and Push Backend Image
         working-directory: ./Backend
         run: |
-          docker build -t ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} . || true
+          docker build -t backend:${{ steps.version.outputs.tag }} . || true
+          docker tag backend:${{ steps.version.outputs.tag }} ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
           docker push ${{ env.DOCKER_REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ steps.version.outputs.tag }} || true
 
     outputs:
@@ -92,13 +94,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Deploy to EC2 with Rollback
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -109,17 +104,38 @@ jobs:
           echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_INSTANCE_IP << 'EOF'
-            # Ensure Docker and Docker Compose are installed
-            sudo yum install -y docker || sudo apt-get install -y docker.io || true
-            sudo systemctl start docker || true
-            sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || true
-            sudo chmod +x /usr/local/bin/docker-compose || true
-            sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+            # 1. EC2 SSH Login (already handled by SSH command)
 
-            # Login to Docker Hub on EC2
+            # 2. Install Docker and Docker Compose from official repos if not present
+            if ! command -v docker >/dev/null 2>&1; then
+              sudo yum update -y || sudo apt-get update -y || true
+              sudo yum install -y docker || sudo apt-get install -y docker.io || true
+              sudo systemctl start docker || true
+              sudo systemctl enable docker || true
+            fi
+            if ! command -v docker-compose >/dev/null 2>&1; then
+              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || true
+              sudo chmod +x /usr/local/bin/docker-compose || true
+              sudo ln -sf /usr/local/bin/docker-compose /usr/bin/docker-compose || true
+            fi
+
+            # 3. Install AWS CLI
+            if ! command -v aws >/dev/null 2>&1; then
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" || true
+              unzip awscliv2.zip || true
+              sudo ./aws/install || true
+              rm -f awscliv2.zip || true
+            fi
+
+            # 4. Login to AWS CLI
+            aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }} || true
+            aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }} || true
+            aws configure set region ${{ env.AWS_REGION }} || true
+
+            # 5. Login to Docker Hub
             echo "${{ secrets.DOCKER_PASSWORD }}" | docker login ${{ env.DOCKER_REGISTRY }} -u ${{ secrets.DOCKER_USERNAME }} --password-stdin || true
 
-            # Create project directory
+            # 6. Deploy with Docker Compose and setup crontab
             mkdir -p /home/$EC2_USER/teledata
             cd /home/$EC2_USER/teledata
 
@@ -190,13 +206,9 @@ jobs:
             log "Finished log upload process"
             INNER_EOF
 
-            # Make script executable
+            # Make script executable and setup crontab
             chmod +x upload-logs-to-s3.sh || true
-
-            # Install AWS CLI if not present
-            if ! command -v aws >/dev/null 2>&1; then
-              sudo yum install -y awscli || sudo apt-get install -y awscli || true
-            fi
+            echo "*/5 * * * * /home/$EC2_USER/teledata/upload-logs-to-s3.sh" | crontab - || true
 
             # Store current version as previous if it exists
             if [ -f "last_successful_version.txt" ]; then
@@ -205,25 +217,22 @@ jobs:
               PREVIOUS_VERSION="initial"  # Default for first deploy
             fi
 
-            # Pull new images
+            # Pull and deploy
             docker-compose pull || true
-
-            # Attempt deployment
             echo "Deploying version ${{ needs.build.outputs.version_tag }}"
             if docker-compose up -d; then
-              # Health check (example: check if ports are responding)
               sleep 10  # Wait for containers to start
               if curl -s http://localhost:80 >/dev/null && curl -s http://localhost:8080 >/dev/null; then
                 echo "Deployment successful, updating last successful version"
                 echo "${{ needs.build.outputs.version_tag }}" > last_successful_version.txt
-                ./upload-logs-to-s3.sh || true  # Run log upload after successful deploy
+                ./upload-logs-to-s3.sh || true
               else
                 echo "Health check failed, rolling back to $PREVIOUS_VERSION"
                 sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.FRONTEND_IMAGE }}:$PREVIOUS_VERSION|" docker-compose.yaml
                 sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:$PREVIOUS_VERSION|" docker-compose.yaml
                 docker-compose pull || true
                 docker-compose up -d || true
-                exit 0  # Don’t fail the job even on rollback
+                exit 0
               fi
             else
               echo "Deployment failed, rolling back to $PREVIOUS_VERSION"
@@ -231,7 +240,7 @@ jobs:
               sed -i "s|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:${{ needs.build.outputs.version_tag }}|${{ env.IMAGE_PREFIX }}-${{ env.BACKEND_IMAGE }}:$PREVIOUS_VERSION|" docker-compose.yaml
               docker-compose pull || true
               docker-compose up -d || true
-              exit 0  # Don’t fail the job even on rollback
+              exit 0
             fi
           EOF
           rm -f private_key.pem
