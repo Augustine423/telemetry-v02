@@ -16,7 +16,7 @@ jobs:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
         run: |
-          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+          echo "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
             echo "Connected to EC2"
@@ -44,7 +44,7 @@ jobs:
               sudo chmod +x /usr/local/bin/docker-compose
             fi
 
-            # Install AWS CLI (for log uploads)
+            # Install AWS CLI
             if ! command -v aws >/dev/null 2>&1; then
               echo "Installing AWS CLI..."
               sudo apt-get install -y awscli
@@ -76,7 +76,6 @@ jobs:
                   - backend
                 networks:
                   - drone-network
-
               backend:
                 build:
                   context: ./Backend
@@ -89,17 +88,16 @@ jobs:
                   - ./Backend/logs:/app/logs
                 networks:
                   - drone-network
-
             networks:
               drone-network:
                 driver: bridge
             INNER_EOF
 
-            # Create logs directory for backend
+            # Create logs directory
             mkdir -p Backend/logs
             echo "Logs directory created"
 
-            # Build with verbose output and timeout
+            # Build with timeout
             echo "Building services..."
             timeout 20m docker-compose build --progress=plain || { echo "Build timed out or failed"; exit 1; }
 
@@ -164,14 +162,14 @@ jobs:
             log "Finished log upload process"
             INNER_EOF
 
-            # Make the script executable
+            # Make script executable
             chmod +x upload-logs-to-s3.sh
-            echo "upload-logs-to-s3.sh created and made executable"
+            echo "upload-logs-to-s3.sh created"
 
-            # Set up crontab to run every 5 minutes
+            # Set up crontab
             echo "Setting up crontab..."
             (crontab -l 2>/dev/null || true; echo "*/5 * * * * /home/ubuntu/telemetry-v02/upload-logs-to-s3.sh") | crontab -
-            echo "Crontab set to run upload-logs-to-s3.sh every 5 minutes"
+            echo "Crontab set to run every 5 minutes"
 
             # Show running containers
             echo "Running containers:"
