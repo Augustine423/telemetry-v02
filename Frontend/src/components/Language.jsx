@@ -4,7 +4,7 @@ export const translations = {
     ENG: {
       // LoginForm translations (previous)
       lang: "ENG",
-      welcome: "Welcome",
+      welcome: "Hello!",
       signIn: "Sign in to your account",
       usernameOrEmail: "User name or E-mail",
       usernameOrEmailPlaceholder: "User name or E-mail",
