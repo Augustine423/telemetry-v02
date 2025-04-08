@@ -97,7 +97,7 @@ jobs:
     steps:
       - name: Deploy to EC2
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSHPRIVATE_KEY }}
           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
         run: |
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
@@ -125,18 +125,18 @@ jobs:
             echo "Stopping running containers..."
             docker-compose down
 
-            # Deploy the new version
-            echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
-            docker-compose up -d
-
-            # Clean up old tags (keep latest and previous)
+            # Clean up old tags (keep only latest and current SHA)
             echo "Cleaning up old image tags..."
             docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
             docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
 
-            # Prune unused resources (keep tagged images)
+            # Prune unused resources
             echo "Pruning Docker system..."
             docker system prune -f
+
+            # Deploy the new version
+            echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
+            docker-compose up -d
 
             # Show running containers
             echo "Running containers:"
@@ -182,6 +182,15 @@ jobs:
             docker tag \${PREVIOUS_FRONTEND_TAG} aioceaneye/frontend:latest
             docker tag \${PREVIOUS_BACKEND_TAG} aioceaneye/backend:latest
             docker-compose up -d
+
+            # Clean up old tags (keep only latest and previous)
+            echo "Cleaning up old image tags after rollback..."
+            docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_FRONTEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
+            docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_BACKEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
+
+            # Prune unused resources
+            echo "Pruning Docker system..."
+            docker system prune -f
 
             # Show running containers
             echo "Running containers after rollback:"
