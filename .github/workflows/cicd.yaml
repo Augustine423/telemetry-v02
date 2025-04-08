@@ -130,4 +130,56 @@ jobs:
             docker system prune -f
 
             # Deploy the new version
-            echo
+            echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
+            docker-compose up -d
+
+            # Show running containers
+            echo "Running containers:"
+            docker ps
+          EOF
+          rm -f private_key.pem
+
+  rollback:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rollback to Previous Version
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+        run: |
+          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+            echo "Connected to EC2 for Rollback"
+
+            # Navigate to project directory
+            cd /home/ubuntu/telemetry-v02
+
+            # Check if previous image tags exist
+            if [ ! -f "previous_frontend_tag_backup.txt" ] || [ ! -f "previous_backend_tag_backup.txt" ]; then
+              echo "No previous image tags found for rollback. Exiting..."
+              exit 1
+            fi
+
+            # Read the previous image tags
+            PREVIOUS_FRONTEND_TAG=$(cat previous_frontend_tag_backup.txt)
+            PREVIOUS_BACKEND_TAG=$(cat previous_backend_tag_backup.txt)
+            echo "Rolling back to frontend: \${PREVIOUS_FRONTEND_TAG}"
+            echo "Rolling back to backend: \${PREVIOUS_BACKEND_TAG}"
+
+            # Stop current containers
+            echo "Stopping current containers..."
+            docker-compose down
+
+            # Rollback to previous images
+            echo "Deploying previous version..."
+            docker tag \${PREVIOUS_FRONTEND_TAG} aioceaneye/frontend:latest
+            docker tag \${PREVIOUS_BACKEND_TAG} aioceaneye/backend:latest
+            docker-compose up -d
+
+            # Show running containers
+            echo "Running containers after rollback:"
+            docker ps
+          EOF
+          rm -f private_key.pem
