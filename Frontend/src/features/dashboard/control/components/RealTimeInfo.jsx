@@ -90,7 +90,7 @@ const RealTimeInfo = () => {
   useEffect(() => {
     const connectWebSocket = () => {
       console.log("Attempting WebSocket connection...");
-      const wsUrl = "ws://52.78.238.179:8080/telemetry";
+      const wsUrl = "ws://52.79.57.3:8080/telemetry";
       ws.current = new WebSocket(wsUrl);
 
       ws.current.onopen = () => {

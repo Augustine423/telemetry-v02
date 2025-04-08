@@ -3,15 +3,16 @@ name: Deploy to EC2
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch: # Allows manual triggering of the workflow (for rollback)
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to EC2
+      - name: Build on EC2
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
@@ -19,7 +20,7 @@ jobs:
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
-            echo "Connected to EC2"
+            echo "Connected to EC2 for Build"
 
             # Install Git
             if ! command -v git >/dev/null 2>&1; then
@@ -27,6 +28,28 @@ jobs:
               sudo apt-get update -y
               sudo apt-get install -y git
             fi
+
+            # Install unzip
+            if ! command -v unzip >/dev/null 2>&1; then
+              echo "Installing unzip..."
+              sudo apt-get install -y unzip
+            fi
+
+            # Install AWS CLI
+            if ! command -v aws >/dev/null 2>&1; then
+              echo "Installing AWS CLI..."
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip awscliv2.zip
+              sudo ./aws/install
+              rm -rf awscliv2.zip aws
+            fi
+
+            # Configure AWS CLI with credentials
+            echo "Configuring AWS CLI..."
+            aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}"
+            aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            aws configure set default.region "${{ secrets.AWS_REGION }}"
+            aws configure set output "json"
 
             # Install Docker
             if ! command -v docker >/dev/null 2>&1; then
@@ -59,16 +82,95 @@ jobs:
             mkdir -p Backend/logs
             echo "Logs directory created"
 
-            # Build with verbose output and timeout
-            echo "Building services..."
+            # Tag the build with the commit SHA
+            COMMIT_SHA=$(git rev-parse --short HEAD)
+            echo "Building services with tag: telemetry-v02:\${COMMIT_SHA}"
             timeout 20m docker-compose build --progress=plain || { echo "Build timed out or failed"; exit 1; }
+            docker tag telemetry-v02:latest telemetry-v02:\${COMMIT_SHA}
+          EOF
+          rm -f private_key.pem
 
-            # Deploy
-            echo "Deploying..."
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+        run: |
+          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+            echo "Connected to EC2 for Deploy"
+
+            # Navigate to project directory
+            cd /home/ubuntu/telemetry-v02
+
+            # Store the current image tag as previous (before deploying new one)
+            if [ -f "previous_image_tag.txt" ]; then
+              echo "Saving current tag as previous..."
+              cp previous_image_tag.txt previous_image_tag_backup.txt
+            fi
+            COMMIT_SHA=$(git rev-parse --short HEAD)
+            echo "telemetry-v02:\${COMMIT_SHA}" > previous_image_tag.txt
+
+            # Stop any running containers
+            echo "Stopping running containers..."
+            docker-compose down
+
+            # Prune unused resources (keep tagged images)
+            echo "Pruning Docker system..."
+            docker system prune -f # Avoid -a to keep tagged images
+
+            # Deploy the new version
+            echo "Deploying with tag: telemetry-v02:\${COMMIT_SHA}"
             docker-compose up -d
 
             # Show running containers
             echo "Running containers:"
+            docker ps
+          EOF
+          rm -f private_key.pem
+
+  rollback:
+    if: ${{ github.event_name == 'workflow_dispatch' }} # Only runs on manual trigger
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rollback to Previous Version
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+        run: |
+          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+          chmod 600 private_key.pem
+          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+            echo "Connected to EC2 for Rollback"
+
+            # Navigate to project directory
+            cd /home/ubuntu/telemetry-v02
+
+            # Check if a previous image tag exists
+            if [ ! -f "previous_image_tag_backup.txt" ]; then
+              echo "No previous image tag found for rollback. Exiting..."
+              exit 1
+            fi
+
+            # Read the previous image tag
+            PREVIOUS_TAG=$(cat previous_image_tag_backup.txt)
+            echo "Rolling back to: \${PREVIOUS_TAG}"
+
+            # Stop current containers
+            echo "Stopping current containers..."
+            docker-compose down
+
+            # Rollback to previous image
+            echo "Deploying previous version..."
+            docker tag \${PREVIOUS_TAG} telemetry-v02:latest
+            docker-compose up -d
+
+            # Show running containers
+            echo "Running containers after rollback:"
             docker ps
           EOF
           rm -f private_key.pem
