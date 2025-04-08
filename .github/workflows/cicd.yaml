@@ -55,9 +55,16 @@ jobs:
               cd /home/ubuntu/telemetry-v02
             fi
 
-            # Build and deploy
-            echo "Building and deploying..."
-            docker-compose build
+            # Create logs directory for backend
+            mkdir -p Backend/logs
+            echo "Logs directory created"
+
+            # Build with verbose output and timeout
+            echo "Building services..."
+            timeout 20m docker-compose build --progress=plain || { echo "Build timed out or failed"; exit 1; }
+
+            # Deploy
+            echo "Deploying..."
             docker-compose up -d
 
             # Show running containers
