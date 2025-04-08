@@ -431,7 +431,7 @@ public class MavlinkClient {
 
                         telemetryList.add(telemetryData);
                     }
-                   // printTelemetryData();
+                    printTelemetryData();
                 }
 
                 if (!telemetryList.isEmpty()) {
