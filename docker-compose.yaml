@@ -9,7 +9,7 @@ services:
     depends_on:
       - backend
     networks:
-      - drone-network
+      - aioceaneye-network  
 
   backend:
     build:
@@ -21,8 +21,8 @@ services:
       - "14552-14559:14552-14559/udp"
       - "15000-15009:15000-15009/udp"
     networks:
-      - aioceaneye-network
+      - aioceaneye-network  
 
 networks:
-  drone-network:
+  aioceaneye-network:  
     driver: bridge
