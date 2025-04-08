@@ -19,6 +19,9 @@ jobs:
         run: |
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
           chmod 600 private_key.pem
+          # Minimal debug: Confirm key file exists and starts correctly
+          echo "Checking private key format..."
+          head -n 1 private_key.pem
           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
             echo "Connected to EC2 for Build"
 
@@ -97,7 +100,7 @@ jobs:
     steps:
       - name: Deploy to EC2
         env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSHPRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
         run: |
           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
@@ -125,7 +128,7 @@ jobs:
             echo "Stopping running containers..."
             docker-compose down
 
-            # Clean up old tags (keep only latest and current SHA)
+            # Clean up old tags (keep latest and current SHA)
             echo "Cleaning up old image tags..."
             docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
             docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
@@ -183,7 +186,7 @@ jobs:
             docker tag \${PREVIOUS_BACKEND_TAG} aioceaneye/backend:latest
             docker-compose up -d
 
-            # Clean up old tags (keep only latest and previous)
+            # Clean up old tags (keep latest and previous)
             echo "Cleaning up old image tags after rollback..."
             docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_FRONTEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
             docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_BACKEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
