@@ -125,13 +125,18 @@ jobs:
             echo "Stopping running containers..."
             docker-compose down
 
-            # Prune unused resources (keep tagged images)
-            echo "Pruning Docker system..."
-            docker system prune -f
-
             # Deploy the new version
             echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
             docker-compose up -d
+
+            # Clean up old tags (keep latest and previous)
+            echo "Cleaning up old image tags..."
+            docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
+            docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
+
+            # Prune unused resources (keep tagged images)
+            echo "Pruning Docker system..."
+            docker system prune -f
 
             # Show running containers
             echo "Running containers:"
