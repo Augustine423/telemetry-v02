@@ -4,7 +4,8 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production=false  # Ensure dev dependencies for build
 COPY . .
-RUN npm run build
+# Increase Node.js heap size to 4GB for the build step
+RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build
 
 # Stage 2: Serve with Nginx
 FROM nginx:alpine
