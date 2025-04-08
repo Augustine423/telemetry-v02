@@ -3,7 +3,7 @@ name: Deploy to EC2
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Allows manual triggering of the workflow (for rollback)
+  workflow_dispatch:
 
 jobs:
   build:
@@ -44,7 +44,7 @@ jobs:
               rm -rf awscliv2.zip aws
             fi
 
-            # Configure AWS CLI with credentials
+            # Configure AWS CLI
             echo "Configuring AWS CLI..."
             aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}"
             aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
@@ -78,15 +78,16 @@ jobs:
               cd /home/ubuntu/telemetry-v02
             fi
 
-            # Create logs directory for backend
+            # Create logs directory for backend (optional, remove if not needed)
             mkdir -p Backend/logs
             echo "Logs directory created"
 
-            # Tag the build with the commit SHA
+            # Build and tag images with version
             COMMIT_SHA=$(git rev-parse --short HEAD)
-            echo "Building services with tag: telemetry-v02:\${COMMIT_SHA}"
+            echo "Building services with tag: \${COMMIT_SHA}"
             timeout 20m docker-compose build --progress=plain || { echo "Build timed out or failed"; exit 1; }
-            docker tag telemetry-v02:latest telemetry-v02:\${COMMIT_SHA}
+            docker tag aioceaneye/frontend:latest aioceaneye/frontend:\${COMMIT_SHA}
+            docker tag aioceaneye/backend:latest aioceaneye/backend:\${COMMIT_SHA}
           EOF
           rm -f private_key.pem
 
@@ -107,13 +108,18 @@ jobs:
             # Navigate to project directory
             cd /home/ubuntu/telemetry-v02
 
-            # Store the current image tag as previous (before deploying new one)
-            if [ -f "previous_image_tag.txt" ]; then
-              echo "Saving current tag as previous..."
-              cp previous_image_tag.txt previous_image_tag_backup.txt
+            # Store current image tags as previous
+            if [ -f "previous_frontend_tag.txt" ]; then
+              echo "Saving current frontend tag as previous..."
+              cp previous_frontend_tag.txt previous_frontend_tag_backup.txt
+            fi
+            if [ -f "previous_backend_tag.txt" ]; then
+              echo "Saving current backend tag as previous..."
+              cp previous_backend_tag.txt previous_backend_tag_backup.txt
             fi
             COMMIT_SHA=$(git rev-parse --short HEAD)
-            echo "telemetry-v02:\${COMMIT_SHA}" > previous_image_tag.txt
+            echo "aioceaneye/frontend:\${COMMIT_SHA}" > previous_frontend_tag.txt
+            echo "aioceaneye/backend:\${COMMIT_SHA}" > previous_backend_tag.txt
 
             # Stop any running containers
             echo "Stopping running containers..."
@@ -121,10 +127,10 @@ jobs:
 
             # Prune unused resources (keep tagged images)
             echo "Pruning Docker system..."
-            docker system prune -f # Avoid -a to keep tagged images
+            docker system prune -f
 
             # Deploy the new version
-            echo "Deploying with tag: telemetry-v02:\${COMMIT_SHA}"
+            echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
             docker-compose up -d
 
             # Show running containers
@@ -134,7 +140,7 @@ jobs:
           rm -f private_key.pem
 
   rollback:
-    if: ${{ github.event_name == 'workflow_dispatch' }} # Only runs on manual trigger
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
       - name: Rollback to Previous Version
@@ -150,23 +156,26 @@ jobs:
             # Navigate to project directory
             cd /home/ubuntu/telemetry-v02
 
-            # Check if a previous image tag exists
-            if [ ! -f "previous_image_tag_backup.txt" ]; then
-              echo "No previous image tag found for rollback. Exiting..."
+            # Check if previous image tags exist
+            if [ ! -f "previous_frontend_tag_backup.txt" ] || [ ! -f "previous_backend_tag_backup.txt" ]; then
+              echo "No previous image tags found for rollback. Exiting..."
               exit 1
             fi
 
-            # Read the previous image tag
-            PREVIOUS_TAG=$(cat previous_image_tag_backup.txt)
-            echo "Rolling back to: \${PREVIOUS_TAG}"
+            # Read the previous image tags
+            PREVIOUS_FRONTEND_TAG=$(cat previous_frontend_tag_backup.txt)
+            PREVIOUS_BACKEND_TAG=$(cat previous_backend_tag_backup.txt)
+            echo "Rolling back to frontend: \${PREVIOUS_FRONTEND_TAG}"
+            echo "Rolling back to backend: \${PREVIOUS_BACKEND_TAG}"
 
             # Stop current containers
             echo "Stopping current containers..."
             docker-compose down
 
-            # Rollback to previous image
+            # Rollback to previous images
             echo "Deploying previous version..."
-            docker tag \${PREVIOUS_TAG} telemetry-v02:latest
+            docker tag \${PREVIOUS_FRONTEND_TAG} aioceaneye/frontend:latest
+            docker tag \${PREVIOUS_BACKEND_TAG} aioceaneye/backend:latest
             docker-compose up -d
 
             # Show running containers

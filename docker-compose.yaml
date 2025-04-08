@@ -3,6 +3,7 @@ services:
     build:
       context: ./Frontend
       dockerfile: Dockerfile
+    image: aioceaneye/frontend:latest
     ports:
       - "80:80"
     depends_on:
@@ -14,14 +15,13 @@ services:
     build:
       context: ./Backend
       dockerfile: Dockerfile
+    image: aioceaneye/backend:latest
     ports:
       - "8080:8080"
       - "14552-14559:14552-14559/udp"
       - "15000-15009:15000-15009/udp"
-    volumes:
-      - ./Backend/logs:/app/logs  # This must be present
     networks:
-      - drone-network
+      - aioceaneye-network
 
 networks:
   drone-network:
