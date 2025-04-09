@@ -1,202 +1,202 @@
-name: Deploy to EC2
+# name: Deploy to EC2
 
-on:
-  push:
-    branches: [ "main" ]
-  workflow_dispatch:
+# on:
+#   push:
+#     branches: [ "main" ]
+#   workflow_dispatch:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
 
-      - name: Build on EC2
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
-        run: |
-          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-          # Minimal debug: Confirm key file exists and starts correctly
-          echo "Checking private key format..."
-          head -n 1 private_key.pem
-          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
-            echo "Connected to EC2 for Build"
+#       - name: Build on EC2
+#         env:
+#           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+#           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+#         run: |
+#           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+#           chmod 600 private_key.pem
+#           # Minimal debug: Confirm key file exists and starts correctly
+#           echo "Checking private key format..."
+#           head -n 1 private_key.pem
+#           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+#             echo "Connected to EC2 for Build"
 
-            # Install Git
-            if ! command -v git >/dev/null 2>&1; then
-              echo "Installing Git..."
-              sudo apt-get update -y
-              sudo apt-get install -y git
-            fi
+#             # Install Git
+#             if ! command -v git >/dev/null 2>&1; then
+#               echo "Installing Git..."
+#               sudo apt-get update -y
+#               sudo apt-get install -y git
+#             fi
 
-            # Install unzip
-            if ! command -v unzip >/dev/null 2>&1; then
-              echo "Installing unzip..."
-              sudo apt-get install -y unzip
-            fi
+#             # Install unzip
+#             if ! command -v unzip >/dev/null 2>&1; then
+#               echo "Installing unzip..."
+#               sudo apt-get install -y unzip
+#             fi
 
-            # Install AWS CLI
-            if ! command -v aws >/dev/null 2>&1; then
-              echo "Installing AWS CLI..."
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip awscliv2.zip
-              sudo ./aws/install
-              rm -rf awscliv2.zip aws
-            fi
+#             # Install AWS CLI
+#             if ! command -v aws >/dev/null 2>&1; then
+#               echo "Installing AWS CLI..."
+#               curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+#               unzip awscliv2.zip
+#               sudo ./aws/install
+#               rm -rf awscliv2.zip aws
+#             fi
 
-            # Configure AWS CLI
-            echo "Configuring AWS CLI..."
-            aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}"
-            aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-            aws configure set default.region "${{ secrets.AWS_REGION }}"
-            aws configure set output "json"
+#             # Configure AWS CLI
+#             echo "Configuring AWS CLI..."
+#             aws configure set aws_access_key_id "${{ secrets.AWS_ACCESS_KEY_ID }}"
+#             aws configure set aws_secret_access_key "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+#             aws configure set default.region "${{ secrets.AWS_REGION }}"
+#             aws configure set output "json"
 
-            # Install Docker
-            if ! command -v docker >/dev/null 2>&1; then
-              echo "Installing Docker..."
-              sudo apt-get install -y docker.io
-              sudo systemctl start docker
-              sudo systemctl enable docker
-              sudo usermod -aG docker ubuntu
-            fi
+#             # Install Docker
+#             if ! command -v docker >/dev/null 2>&1; then
+#               echo "Installing Docker..."
+#               sudo apt-get install -y docker.io
+#               sudo systemctl start docker
+#               sudo systemctl enable docker
+#               sudo usermod -aG docker ubuntu
+#             fi
 
-            # Install Docker Compose
-            if ! command -v docker-compose >/dev/null 2>&1; then
-              echo "Installing Docker Compose..."
-              sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
-              sudo chmod +x /usr/local/bin/docker-compose
-            fi
+#             # Install Docker Compose
+#             if ! command -v docker-compose >/dev/null 2>&1; then
+#               echo "Installing Docker Compose..."
+#               sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-\$(uname -s)-\$(uname -m)" -o /usr/local/bin/docker-compose
+#               sudo chmod +x /usr/local/bin/docker-compose
+#             fi
 
-            # Clone or update the repo
-            if [ -d "/home/ubuntu/telemetry-v02" ]; then
-              echo "Updating existing repo..."
-              cd /home/ubuntu/telemetry-v02
-              git pull origin main
-            else
-              echo "Cloning repo..."
-              git clone https://github.com/Augustine423/telemetry-v02.git /home/ubuntu/telemetry-v02
-              cd /home/ubuntu/telemetry-v02
-            fi
+#             # Clone or update the repo
+#             if [ -d "/home/ubuntu/telemetry-v02" ]; then
+#               echo "Updating existing repo..."
+#               cd /home/ubuntu/telemetry-v02
+#               git pull origin main
+#             else
+#               echo "Cloning repo..."
+#               git clone https://github.com/Augustine423/telemetry-v02.git /home/ubuntu/telemetry-v02
+#               cd /home/ubuntu/telemetry-v02
+#             fi
 
-            # Create logs directory for backend (optional, remove if not needed)
-            mkdir -p Backend/logs
-            echo "Logs directory created"
+#             # Create logs directory for backend (optional, remove if not needed)
+#             mkdir -p Backend/logs
+#             echo "Logs directory created"
 
-            # Build and tag images with version
-            COMMIT_SHA=$(git rev-parse --short HEAD)
-            echo "Building services with tag: \${COMMIT_SHA}"
-            timeout 20m docker-compose build --progress=plain || { echo "Build timed out or failed"; exit 1; }
-            docker tag aioceaneye/frontend:latest aioceaneye/frontend:\${COMMIT_SHA}
-            docker tag aioceaneye/backend:latest aioceaneye/backend:\${COMMIT_SHA}
-          EOF
-          rm -f private_key.pem
+#             # Build and tag images with version
+#             COMMIT_SHA=$(git rev-parse --short HEAD)
+#             echo "Building services with tag: \${COMMIT_SHA}"
+#             timeout 20m docker-compose build --progress=plain || { echo "Build timed out or failed"; exit 1; }
+#             docker tag aioceaneye/frontend:latest aioceaneye/frontend:\${COMMIT_SHA}
+#             docker tag aioceaneye/backend:latest aioceaneye/backend:\${COMMIT_SHA}
+#           EOF
+#           rm -f private_key.pem
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to EC2
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
-        run: |
-          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
-            echo "Connected to EC2 for Deploy"
+#   deploy:
+#     needs: build
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Deploy to EC2
+#         env:
+#           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+#           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+#         run: |
+#           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+#           chmod 600 private_key.pem
+#           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+#             echo "Connected to EC2 for Deploy"
 
-            # Navigate to project directory
-            cd /home/ubuntu/telemetry-v02
+#             # Navigate to project directory
+#             cd /home/ubuntu/telemetry-v02
 
-            # Store current image tags as previous
-            if [ -f "previous_frontend_tag.txt" ]; then
-              echo "Saving current frontend tag as previous..."
-              cp previous_frontend_tag.txt previous_frontend_tag_backup.txt
-            fi
-            if [ -f "previous_backend_tag.txt" ]; then
-              echo "Saving current backend tag as previous..."
-              cp previous_backend_tag.txt previous_backend_tag_backup.txt
-            fi
-            COMMIT_SHA=$(git rev-parse --short HEAD)
-            echo "aioceaneye/frontend:\${COMMIT_SHA}" > previous_frontend_tag.txt
-            echo "aioceaneye/backend:\${COMMIT_SHA}" > previous_backend_tag.txt
+#             # Store current image tags as previous
+#             if [ -f "previous_frontend_tag.txt" ]; then
+#               echo "Saving current frontend tag as previous..."
+#               cp previous_frontend_tag.txt previous_frontend_tag_backup.txt
+#             fi
+#             if [ -f "previous_backend_tag.txt" ]; then
+#               echo "Saving current backend tag as previous..."
+#               cp previous_backend_tag.txt previous_backend_tag_backup.txt
+#             fi
+#             COMMIT_SHA=$(git rev-parse --short HEAD)
+#             echo "aioceaneye/frontend:\${COMMIT_SHA}" > previous_frontend_tag.txt
+#             echo "aioceaneye/backend:\${COMMIT_SHA}" > previous_backend_tag.txt
 
-            # Stop any running containers
-            echo "Stopping running containers..."
-            docker-compose down
+#             # Stop any running containers
+#             echo "Stopping running containers..."
+#             docker-compose down
 
-            # Clean up old tags (keep latest and current SHA)
-            echo "Cleaning up old image tags..."
-            docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
-            docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
+#             # Clean up old tags (keep latest and current SHA)
+#             echo "Cleaning up old image tags..."
+#             docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
+#             docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "\${COMMIT_SHA}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
 
-            # Prune unused resources
-            echo "Pruning Docker system..."
-            docker system prune -f
+#             # Prune unused resources
+#             echo "Pruning Docker system..."
+#             docker system prune -f
 
-            # Deploy the new version
-            echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
-            docker-compose up -d
+#             # Deploy the new version
+#             echo "Deploying with aioceaneye/frontend:latest and aioceaneye/backend:latest"
+#             docker-compose up -d
 
-            # Show running containers
-            echo "Running containers:"
-            docker ps
-          EOF
-          rm -f private_key.pem
+#             # Show running containers
+#             echo "Running containers:"
+#             docker ps
+#           EOF
+#           rm -f private_key.pem
 
-  rollback:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Rollback to Previous Version
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
-          EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
-        run: |
-          echo -e "$SSH_PRIVATE_KEY" > private_key.pem
-          chmod 600 private_key.pem
-          ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
-            echo "Connected to EC2 for Rollback"
+#   rollback:
+#     if: ${{ github.event_name == 'workflow_dispatch' }}
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Rollback to Previous Version
+#         env:
+#           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+#           EC2_INSTANCE_IP: ${{ secrets.EC2_INSTANCE_IP }}
+#         run: |
+#           echo -e "$SSH_PRIVATE_KEY" > private_key.pem
+#           chmod 600 private_key.pem
+#           ssh -i private_key.pem -o StrictHostKeyChecking=no ubuntu@$EC2_INSTANCE_IP << EOF
+#             echo "Connected to EC2 for Rollback"
 
-            # Navigate to project directory
-            cd /home/ubuntu/telemetry-v02
+#             # Navigate to project directory
+#             cd /home/ubuntu/telemetry-v02
 
-            # Check if previous image tags exist
-            if [ ! -f "previous_frontend_tag_backup.txt" ] || [ ! -f "previous_backend_tag_backup.txt" ]; then
-              echo "No previous image tags found for rollback. Exiting..."
-              exit 1
-            fi
+#             # Check if previous image tags exist
+#             if [ ! -f "previous_frontend_tag_backup.txt" ] || [ ! -f "previous_backend_tag_backup.txt" ]; then
+#               echo "No previous image tags found for rollback. Exiting..."
+#               exit 1
+#             fi
 
-            # Read the previous image tags
-            PREVIOUS_FRONTEND_TAG=$(cat previous_frontend_tag_backup.txt)
-            PREVIOUS_BACKEND_TAG=$(cat previous_backend_tag_backup.txt)
-            echo "Rolling back to frontend: \${PREVIOUS_FRONTEND_TAG}"
-            echo "Rolling back to backend: \${PREVIOUS_BACKEND_TAG}"
+#             # Read the previous image tags
+#             PREVIOUS_FRONTEND_TAG=$(cat previous_frontend_tag_backup.txt)
+#             PREVIOUS_BACKEND_TAG=$(cat previous_backend_tag_backup.txt)
+#             echo "Rolling back to frontend: \${PREVIOUS_FRONTEND_TAG}"
+#             echo "Rolling back to backend: \${PREVIOUS_BACKEND_TAG}"
 
-            # Stop current containers
-            echo "Stopping current containers..."
-            docker-compose down
+#             # Stop current containers
+#             echo "Stopping current containers..."
+#             docker-compose down
 
-            # Rollback to previous images
-            echo "Deploying previous version..."
-            docker tag \${PREVIOUS_FRONTEND_TAG} aioceaneye/frontend:latest
-            docker tag \${PREVIOUS_BACKEND_TAG} aioceaneye/backend:latest
-            docker-compose up -d
+#             # Rollback to previous images
+#             echo "Deploying previous version..."
+#             docker tag \${PREVIOUS_FRONTEND_TAG} aioceaneye/frontend:latest
+#             docker tag \${PREVIOUS_BACKEND_TAG} aioceaneye/backend:latest
+#             docker-compose up -d
 
-            # Clean up old tags (keep latest and previous)
-            echo "Cleaning up old image tags after rollback..."
-            docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_FRONTEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
-            docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_BACKEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
+#             # Clean up old tags (keep latest and previous)
+#             echo "Cleaning up old image tags after rollback..."
+#             docker images aioceaneye/frontend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_FRONTEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/frontend:{} || true
+#             docker images aioceaneye/backend --format "{{.Tag}}" | grep -v "latest" | grep -v "${PREVIOUS_BACKEND_TAG##*:}" | xargs -I {} docker rmi aioceaneye/backend:{} || true
 
-            # Prune unused resources
-            echo "Pruning Docker system..."
-            docker system prune -f
+#             # Prune unused resources
+#             echo "Pruning Docker system..."
+#             docker system prune -f
 
-            # Show running containers
-            echo "Running containers after rollback:"
-            docker ps
-          EOF
-          rm -f private_key.pem
+#             # Show running containers
+#             echo "Running containers after rollback:"
+#             docker ps
+#           EOF
+#           rm -f private_key.pem
