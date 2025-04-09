@@ -1,16 +1,12 @@
-version: '3.8'
-services:
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    image: aioceaneye/frontend:latest
-    ports:
-      - "80:80"
-  backend:
-    build:
-      context: ./Backend
-      dockerfile: Dockerfile
-    image: aioceaneye/backend:latest
-    ports:
-      - "8080:8080"
+FROM node:20 AS builder
+WORKDIR /app
+COPY Frontend/ ./
+COPY .env.production ./.env
+RUN npm install
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/build /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
