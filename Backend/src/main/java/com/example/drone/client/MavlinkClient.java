@@ -73,6 +73,8 @@ public class MavlinkClient {
         data.put("battery_voltage", 0.0);
         data.put("battery_current", 0.0);
         data.put("waypoints_count", 0);
+        data.put("orange_heading", "Unknown");
+        data.put("red_heading", "Unknown");
 
         return data;
     }
@@ -220,8 +222,14 @@ public class MavlinkClient {
             telemetryData.put("airspeed", vfrHud.airspeed());
             telemetryData.put("ground_speed", vfrHud.groundspeed());
             telemetryData.put("vertical_speed", vfrHud.climb());
+            double heading= vfrHud.heading();
+            String formattedHeading=convertBearingToDirection(heading);
+            telemetryData.put("red_heading",formattedHeading);
         } else if (message.getPayload() instanceof  NavControllerOutput navControllerOutput) {
             telemetryData.put("wp_dist", navControllerOutput.wpDist());
+            double bearing = navControllerOutput.navBearing();
+            String formattedBearing = convertBearingToDirection(bearing);
+            telemetryData.put("orange_heading", formattedBearing);
 
         } else if (message.getPayload() instanceof Attitude attitude) {
             telemetryData.put("roll", String.format("%.2f", Math.toDegrees(attitude.roll())));
@@ -370,7 +378,14 @@ public class MavlinkClient {
         double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c; // returns the distance in km
     }
-
+   private String convertBearingToDirection(double bearing) {
+    String[] directions = {
+            "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
+            "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
+    };
+    int index = (int) Math.round(bearing / 22.5) % 16;
+    return directions[index] + " " + (int) bearing;
+}
 
     private void createLogFile(int port) {
         File logDir = new File("logs");
