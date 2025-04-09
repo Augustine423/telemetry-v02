@@ -17,9 +17,20 @@ services:
       dockerfile: Dockerfile
     image: aioceaneye/backend:latest
     ports:
-      - "8080:8080"
+      - "8082:8082"
       - "14552-14559:14552-14559/udp"
       - "15000-15009:15000-15009/udp"
+    networks:
+      - aioceaneye-network  
+
+  backend1:
+    build:
+      context: ./Backend1
+      dockerfile: Dockerfile
+    image: aioceaneye/backend1:latest
+    ports:
+      - "8080:8080"
+      - "3306:3306"
     networks:
       - aioceaneye-network  
 
